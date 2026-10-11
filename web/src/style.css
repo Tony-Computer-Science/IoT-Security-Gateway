@@ -1,0 +1,208 @@
+/* Design tokens. System fonts only: no web fonts, no external requests. */
+:root {
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --radius: 6px;
+  --max-width: 44rem;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1b1f24;
+  --text-muted: #5b6470;
+  --border: #d0d5dc;
+  --accent: #1f5fbf;
+  --accent-text: #ffffff;
+  --focus: #1f5fbf;
+
+  /* State colors. Every state ALSO has a unique glyph, border style, and text
+     label, so color is never the only signal. */
+  --ok: #17703a;            --ok-bg: #e7f5ec;
+  --pending: #6b5a00;       --pending-bg: #fbf5d6;
+  --denied: #a1161f;        --denied-bg: #fbe9ea;
+  --ratelimit: #8a3f00;     --ratelimit-bg: #fdeedd;
+  --unreachable: #6a2c91;   --unreachable-bg: #f3eafa;
+  --linkdown: #3c4450;      --linkdown-bg: #e6e8eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121418;
+    --surface: #1c1f25;
+    --text: #e6e8eb;
+    --text-muted: #9aa3ae;
+    --border: #353a43;
+    --accent: #6ea2f0;
+    --accent-text: #0d1117;
+    --focus: #6ea2f0;
+    --ok: #6fd393;            --ok-bg: #12301e;
+    --pending: #e8d36b;       --pending-bg: #2f2a0f;
+    --denied: #f2878d;        --denied-bg: #3a1417;
+    --ratelimit: #f5ab6b;     --ratelimit-bg: #3a2210;
+    --unreachable: #c99af0;   --unreachable-bg: #2c1b3a;
+    --linkdown: #c3c9d1;      --linkdown-bg: #2a2e35;
+  }
+}
+
+/* Base */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 1rem/1.5 var(--font);
+  color: var(--text);
+  background: var(--bg);
+}
+
+main, .app-header, #notice {
+  max-width: var(--max-width);
+  margin-inline: auto;
+  padding-inline: var(--space-3);
+}
+
+[hidden] { display: none !important; }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+h1, h2 { line-height: 1.2; }
+h2 { font-size: 1.25rem; margin: var(--space-4) 0 var(--space-3); }
+
+/* Header and navigation */
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+}
+.app-title { font-size: 1.1rem; margin: 0; }
+.app-nav { display: flex; gap: var(--space-1); }
+
+.nav-btn[aria-current="page"] {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+/* Surfaces and controls */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+form.card { display: grid; gap: var(--space-2); max-width: 22rem; }
+
+input, select, button { font: inherit; }
+
+input, select {
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+button {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+button[type="submit"], .actions button { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+.link-btn {
+  margin-top: var(--space-3);
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  padding: 0;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+.status-grid dt { color: var(--text-muted); }
+.status-grid dd { margin: 0; font-weight: 600; }
+
+.actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+
+.table-wrap { overflow-x: auto; }
+.events-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.events-table th, .events-table td { text-align: left; padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--border); }
+.events-table td:first-child, .events-table td:nth-child(2) { font-family: var(--font-mono); }
+
+/* ---------------------------------------------------------------------------
+   State styles: <el class="state" data-state="...">Label text</el>
+   Each state differs in color, glyph, AND border style, and the element's
+   text gives a written label, so no state relies on color alone.
+     ok                  ✓  solid border
+     pending             …  dashed border, pulsing (unless reduced motion)
+     denied              ✕  thick solid left bar
+     rate-limited        ‖  double border
+     target-unreachable  ⚠  dotted border
+     link-down           ⨯  thick double left bar, striped background
+   --------------------------------------------------------------------------- */
+.state {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+.state::before { font-weight: 700; flex: none; }
+
+.state[data-state="ok"] {
+  color: var(--ok); background: var(--ok-bg); border-color: var(--ok);
+}
+.state[data-state="ok"]::before { content: "✓"; }
+
+.state[data-state="pending"] {
+  color: var(--pending); background: var(--pending-bg); border: 2px dashed var(--pending);
+}
+.state[data-state="pending"]::before { content: "…"; }
+
+.state[data-state="denied"] {
+  color: var(--denied); background: var(--denied-bg); border-color: var(--denied); border-left-width: 8px;
+}
+.state[data-state="denied"]::before { content: "✕"; }
+
+.state[data-state="rate-limited"] {
+  color: var(--ratelimit); background: var(--ratelimit-bg); border: 4px double var(--ratelimit);
+}
+.state[data-state="rate-limited"]::before { content: "‖"; }
+
+.state[data-state="target-unreachable"] {
+  color: var(--unreachable); background: var(--unreachable-bg); border: 3px dotted var(--unreachable);
+}
+.state[data-state="target-unreachable"]::before { content: "⚠"; }
+
+.state[data-state="link-down"] {
+  color: var(--linkdown);
+  background: repeating-linear-gradient(-45deg, var(--linkdown-bg) 0 8px, transparent 8px 16px);
+  border: 2px solid var(--linkdown); border-left: 8px double var(--linkdown);
+}
+.state[data-state="link-down"]::before { content: "⨯"; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .state[data-state="pending"]::before { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+}

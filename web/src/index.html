@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Security Gateway</title>
+  <!-- Empty icon: stops the browser requesting /favicon.ico from the board. -->
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1 class="app-title">IoT Security Gateway</h1>
+    <nav class="app-nav" aria-label="Views">
+      <button type="button" class="nav-btn" data-nav="login">Sign in</button>
+      <button type="button" class="nav-btn" data-nav="control">Control</button>
+      <button type="button" class="nav-btn" data-nav="events">Events</button>
+    </nav>
+  </header>
+
+  <!-- Global notice area for errors and state changes. Announced to screen readers. -->
+  <p id="notice" class="state" data-state="" role="status" aria-live="polite" hidden></p>
+
+  <main>
+    <!-- View 1: login -->
+    <section id="view-login" class="view" data-view="login" aria-labelledby="login-heading" hidden>
+      <h2 id="login-heading">Sign in</h2>
+      <form id="login-form" class="card" autocomplete="off" novalidate>
+        <label for="login-username">Username</label>
+        <input id="login-username" name="username" type="text" autocomplete="username" required>
+        <label for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        <button type="submit">Sign in</button>
+        <p id="login-message" class="state" data-state="" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <!-- View 2: device control and status -->
+    <section id="view-control" class="view" data-view="control" aria-labelledby="control-heading" hidden>
+      <h2 id="control-heading">Device control</h2>
+      <div class="card">
+        <dl class="status-grid">
+          <dt>Output</dt>        <dd id="status-output">—</dd>
+          <dt>Target</dt>        <dd id="status-target">—</dd>
+          <dt>Gateway link</dt>  <dd id="status-link">—</dd>
+          <dt>Uptime</dt>        <dd id="status-uptime">—</dd>
+        </dl>
+        <p id="control-state" class="state" data-state="" role="status" hidden></p>
+        <div class="actions">
+          <button type="button" data-action="led_on">Turn on</button>
+          <button type="button" data-action="led_off">Turn off</button>
+        </div>
+      </div>
+      <button type="button" id="logout-btn" class="link-btn">Sign out</button>
+    </section>
+
+    <!-- View 3: event log -->
+    <section id="view-events" class="view" data-view="events" aria-labelledby="events-heading" hidden>
+      <h2 id="events-heading">Event log</h2>
+      <div class="card">
+        <div class="toolbar">
+          <label for="events-outcome">Outcome</label>
+          <select id="events-outcome">
+            <option value="">All</option>
+            <option value="allowed">Allowed</option>
+            <option value="denied">Denied</option>
+            <option value="alert">Alert</option>
+          </select>
+          <button type="button" id="events-refresh">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table class="events-table">
+            <thead>
+              <tr><th scope="col">#</th><th scope="col">Uptime</th><th scope="col">Type</th><th scope="col">Outcome</th><th scope="col">Detail</th></tr>
+            </thead>
+            <tbody id="events-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

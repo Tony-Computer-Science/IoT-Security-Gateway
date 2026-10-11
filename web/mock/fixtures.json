@@ -1,0 +1,17 @@
+{
+  "_comment": "Mock-only values. NOT authoritative firmware limits; see docs/api-contract.md Q4. The password is never stored here: it is generated at startup or read from MOCK_PASSWORD.",
+  "username": "operator",
+  "token_ttl_s": 900,
+  "max_failed_logins": 5,
+  "lockout_s": 60,
+  "command_rate_limit": { "max": 10, "window_s": 10 },
+  "event_log_capacity": 200,
+  "events_default_limit": 50,
+  "max_body_bytes": 1024,
+  "initial_state": {
+    "output": "off",
+    "link_ok": true,
+    "target_reachable": true,
+    "latency_ms": 0
+  }
+}
