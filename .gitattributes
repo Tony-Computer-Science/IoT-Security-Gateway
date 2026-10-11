@@ -1,0 +1,42 @@
+# Normalize all text files to LF in the repository.
+* text=auto eol=lf
+
+# Source and config files: always text, always LF.
+*.c        text eol=lf
+*.h        text eol=lf
+*.txt      text eol=lf
+*.cmake    text eol=lf
+*.csv      text eol=lf
+*.py       text eol=lf
+*.sh       text eol=lf
+*.js       text eol=lf
+*.html     text eol=lf
+*.css      text eol=lf
+*.json     text eol=lf
+*.md       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+
+# KiCad files are text (s-expressions), but diffs are rarely useful to review.
+*.kicad_sch   text eol=lf -diff
+*.kicad_pcb   text eol=lf -diff
+*.kicad_pro   text eol=lf
+*.kicad_sym   text eol=lf
+*.kicad_mod   text eol=lf
+
+# Binaries: never normalize, never diff.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.pdf    binary
+*.bin    binary
+*.elf    binary
+*.gz     binary
+*.zip    binary
+*.step   binary
+*.stp    binary
+*.wrl    binary
+*.gbr    binary
+*.drl    binary

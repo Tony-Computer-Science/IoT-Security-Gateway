@@ -1,0 +1,50 @@
+# CODEOWNERS: currently INACTIVE
+#
+# Ownership is still settling. Every rule below is commented out on purpose,
+# so nobody's PR gets auto-blocked waiting on a reviewer who may change.
+#
+# To activate, once the team has confirmed assignments:
+#   1. Replace each @TODO-username-* placeholder with a real GitHub username
+#      (the lookup table is at the top of CONTRIBUTING.md).
+#   2. Uncomment the rules.
+#   3. Optionally enable "Require review from Code Owners" in branch protection.
+#
+# Ownership routes reviews; it does not restrict who may work where.
+# When an assignment changes, update this file AND the directory README's
+# "Current owner (provisional)" section in the same pull request.
+#
+# Later rules override earlier ones for matching paths.
+
+# --- Fallback: project lead ---------------------------------------------------
+# *                                              @TODO-username-goncalves
+
+# --- Shared documentation and contracts ---------------------------------------
+# /docs/                                         @TODO-username-goncalves
+# /docs/api-contract.md                          @TODO-username-goncalves @TODO-username-lian @TODO-username-dhakal
+# /docs/spi-protocol.md                          @TODO-username-grande @TODO-username-cattadoris @TODO-username-goncalves
+
+# --- Board A: station board ---------------------------------------------------
+# /firmware/station-board/                       @TODO-username-goncalves @TODO-username-lian
+# /firmware/station-board/components/net_station/ @TODO-username-goncalves
+# /firmware/station-board/components/auth/       @TODO-username-goncalves
+# /firmware/station-board/components/policy/     @TODO-username-lian
+# /firmware/station-board/components/eventlog/   @TODO-username-lian
+# /firmware/station-board/components/spi_host/   @TODO-username-grande @TODO-username-cattadoris
+
+# --- Board B: bridge board ----------------------------------------------------
+# /firmware/bridge-board/                        @TODO-username-grande
+
+# --- Board C: target device ---------------------------------------------------
+# /firmware/target-device/                       @TODO-username-grande
+
+# --- Web interface ------------------------------------------------------------
+# /web/                                          @TODO-username-dhakal
+
+# --- Hardware -----------------------------------------------------------------
+# /hardware/                                     @TODO-username-cattadoris
+
+# --- Tools and test scripts ---------------------------------------------------
+# /tools/                                        @TODO-username-goncalves
+
+# --- Repository configuration -------------------------------------------------
+# /.github/                                      @TODO-username-goncalves

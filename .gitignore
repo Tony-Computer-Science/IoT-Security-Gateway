@@ -1,0 +1,71 @@
+# ---------------------------------------------------------------------------
+# ESP-IDF
+# ---------------------------------------------------------------------------
+# `build/` matches at any depth, which is why the web build scripts live in
+# web/scripts/ and not web/build/. Do not add a directory named build/ that
+# you expect to be tracked.
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+# sdkconfig.defaults is intentionally tracked. Never put secrets in it.
+!sdkconfig.defaults
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ---------------------------------------------------------------------------
+# Node (not used, ignored in case a tool ever creates it)
+# ---------------------------------------------------------------------------
+node_modules/
+
+# ---------------------------------------------------------------------------
+# Web build output
+# ---------------------------------------------------------------------------
+web/dist/
+web/*.bin
+
+# ---------------------------------------------------------------------------
+# KiCad
+# ---------------------------------------------------------------------------
+*-backups/
+*.kicad_prl
+fp-info-cache
+*.lck
+_autosave-*
+
+# ---------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~
+
+# ---------------------------------------------------------------------------
+# Secrets: credentials, certificates, private keys, environment files (R2)
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.csr
+*.p12
+*.pfx
+*.jks
+credentials.*
+*_credentials.*
+secrets.*
+*.secret
