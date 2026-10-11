@@ -1,0 +1,10 @@
+# Board B (bridge board) defaults. Tracked in git.
+# NEVER put Wi-Fi credentials, keys, or passwords here (R2). Set them with
+# `idf.py menuconfig`, which writes the git-ignored `sdkconfig`.
+
+CONFIG_IDF_TARGET="esp32s3"
+
+# Default single-app partition table for now.
+# TODO(hardware): confirm the module's flash size and set CONFIG_ESPTOOLPY_FLASHSIZE_*.
+
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y

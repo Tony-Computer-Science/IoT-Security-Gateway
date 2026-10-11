@@ -1,0 +1,20 @@
+# Board A (station board) defaults. Tracked in git.
+# NEVER put Wi-Fi credentials, keys, or passwords here (R2). Set them with
+# `idf.py menuconfig`, which writes the git-ignored `sdkconfig`.
+
+CONFIG_IDF_TARGET="esp32s3"
+
+# TODO(hardware): confirm the module's flash size (DevKitC-1 ships with
+# N8 / N16 / N32 modules). 4 MB is a safe lower bound that fits partitions.csv.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Custom partition table with a LittleFS partition for web assets.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# TODO(net_station): enable the HTTPS server when implementing it, e.g.
+#   CONFIG_ESP_HTTPS_SERVER_ENABLE=y
+# TODO(net_station): add the esp_littlefs managed component (idf_component.yml)
+#   when mounting the www partition.
