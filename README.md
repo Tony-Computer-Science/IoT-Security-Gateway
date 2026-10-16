@@ -1,6 +1,6 @@
 # IoT Security Gateway
 
-**CyberGuards, CS 484.** A low-cost IoT security gateway built from three
+**CyberGuards, CSE 484.** A low-cost IoT security gateway built from three
 ESP32-S3-DevKitC-1 boards. It protects an existing insecure IoT device without
 changing that device.
 
