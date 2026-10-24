@@ -1,5 +1,6 @@
 // Application bootstrap: view registry, show/hide switching, and the status
-// polling loop. View rendering is intentionally left as TODO stubs.
+// polling loop, session guard, and the login view. Control and events
+// rendering are still TODO stubs.
 //
 // No framework, no router: a view is a <section data-view="name"> toggled
 // with the `hidden` attribute.
@@ -34,6 +35,10 @@ export function showView(name) {
 
   // Session guard: every view except login needs a valid, unexpired token.
   if (name !== 'login' && !hasValidSession()) {
+    if (api.hasSession()) {
+      expireSession(); // deadline passed before the timer fired
+      return;
+    }
     if (!isLockedOut()) setLoginMessage('', 'Sign in to continue.');
     name = 'login';
   }
@@ -151,13 +156,128 @@ function setLoginMessage(state, text) {
   msg.hidden = !text;
 }
 
+let loginWired = false;
+let lockoutTimer = null;
+
 /**
- * TODO(login view): wire #login-form submit -> api.login(); show
- * invalid_credentials (with attempts remaining) and locked_out (with
- * retry_after) using the .state styles; on success showView('control').
+ * Called each time the login view is shown. Wires the form once.
  * @param {HTMLElement} el  the login <section>
  */
-function renderLogin(el) {}
+function renderLogin(el) {
+  const form = el.querySelector('#login-form');
+  if (!loginWired) {
+    form.addEventListener('submit', onLoginSubmit);
+    loginWired = true;
+  }
+  if (!isLockedOut()) form.elements.username.focus();
+}
+
+async function onLoginSubmit(event) {
+  // Handle the submit in JavaScript only. The browser must never send the
+  // form itself, which would reload the page and put fields in the URL.
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit.disabled) return; // request in flight, or locked out
+
+  const username = form.elements.username.value;
+  const password = form.elements.password.value;
+  if (!username || !password) {
+    setLoginMessage('denied', 'Enter a username and password.');
+    return;
+  }
+
+  submit.disabled = true;
+  setLoginMessage('pending', 'Signing in…');
+  try {
+    const { expiresIn } = await api.login(username, password);
+    form.reset(); // do not leave the password sitting in the page
+    setLoginMessage('', '');
+    submit.disabled = false;
+    startSessionTimer(expiresIn);
+    showView('control');
+  } catch (err) {
+    form.elements.password.value = '';
+    if (err.code === api.ErrorCode.LOCKED_OUT && err.retryAfter !== null) {
+      startLockout(err.retryAfter); // keeps the submit button disabled
+      return;
+    }
+    submit.disabled = false;
+    setLoginMessage('denied', loginErrorText(err));
+    form.elements.password.focus();
+  }
+}
+
+/** @param {api.ApiError} err */
+function loginErrorText(err) {
+  switch (err.code) {
+    case api.ErrorCode.INVALID_CREDENTIALS: {
+      const n = err.attemptsRemaining;
+      if (n === null) return 'Wrong username or password.';
+      if (n === 0) return 'Wrong username or password. No attempts remaining.';
+      return `Wrong username or password. ${n} attempt${n === 1 ? '' : 's'} remaining before lockout.`;
+    }
+    case api.ErrorCode.LOCKED_OUT:
+      return 'Too many failed attempts. Try again later.';
+    case api.ErrorCode.NETWORK:
+    case api.ErrorCode.TIMEOUT:
+      return 'Could not reach the gateway. Check your connection and try again.';
+    default:
+      return `Sign-in failed (${err.code || 'unknown error'}).`;
+  }
+}
+
+// Lockout countdown. The end time is stored as a deadline and the display is
+// recomputed from it, so a delayed timer never makes the countdown drift.
+function startLockout(retryAfterS) {
+  stopLockoutTimer();
+  lockoutEndsAt = Date.now() + retryAfterS * 1000;
+  document.querySelector('#login-form button[type="submit"]').disabled = true;
+
+  // One wrapper element, because .state lays out its children with flex.
+  // The seconds span is aria-live="off" so screen readers announce the
+  // lockout once instead of every second.
+  const text = document.createElement('span');
+  const seconds = document.createElement('span');
+  seconds.setAttribute('aria-live', 'off');
+  seconds.textContent = formatSeconds(retryAfterS);
+  text.append('Too many failed attempts. Sign-in is locked. Try again in ', seconds, '.');
+
+  const msg = document.getElementById('login-message');
+  msg.dataset.state = 'rate-limited';
+  msg.replaceChildren(text);
+  msg.hidden = false;
+
+  lockoutTimer = setInterval(() => {
+    const left = Math.ceil((lockoutEndsAt - Date.now()) / 1000);
+    if (left <= 0) {
+      endLockout();
+      return;
+    }
+    const shown = formatSeconds(left);
+    if (seconds.textContent !== shown) seconds.textContent = shown;
+  }, 250);
+}
+
+function endLockout() {
+  stopLockoutTimer();
+  lockoutEndsAt = 0;
+  document.querySelector('#login-form button[type="submit"]').disabled = false;
+  setLoginMessage('', 'You can try signing in again.');
+}
+
+function stopLockoutTimer() {
+  if (lockoutTimer !== null) {
+    clearInterval(lockoutTimer);
+    lockoutTimer = null;
+  }
+}
+
+/** 45 -> "45 s", 125 -> "2:05" */
+function formatSeconds(s) {
+  if (s < 60) return `${s} s`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 // ---------------------------------------------------------------------------
 // View rendering: TODO stubs. Signatures are fixed; fill in the bodies.
