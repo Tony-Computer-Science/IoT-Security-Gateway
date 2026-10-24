@@ -30,12 +30,16 @@ function registerView(name, hooks = {}) {
 }
 
 export function showView(name) {
-  const next = views[name];
-  if (!next) throw new Error(`unknown view: ${name}`);
-  if (currentView === name) return;
+  if (!views[name]) throw new Error(`unknown view: ${name}`);
 
-  // TODO(view guard): once login is implemented, redirect to 'login' when
-  // !api.hasSession() and name !== 'login'.
+  // Session guard: every view except login needs a valid, unexpired token.
+  if (name !== 'login' && !hasValidSession()) {
+    if (!isLockedOut()) setLoginMessage('', 'Sign in to continue.');
+    name = 'login';
+  }
+
+  const next = views[name];
+  if (currentView === name) return;
 
   const prev = currentView && views[currentView];
   if (prev) {
@@ -50,6 +54,43 @@ export function showView(name) {
     else btn.removeAttribute('aria-current');
   }
   if (next.onShow) next.onShow();
+}
+
+// ---------------------------------------------------------------------------
+// Session lifetime
+// ---------------------------------------------------------------------------
+
+// The token itself lives only in api.js, in memory (R2). app.js tracks when
+// it expires so the UI can return to login without waiting for a 401.
+let sessionExpiresAt = 0; // Date.now() milliseconds; 0 means no session
+let sessionTimer = null;
+
+// Checks the deadline as well as the timer, because browsers delay timers in
+// background tabs and the timer may fire late.
+function hasValidSession() {
+  return api.hasSession() && Date.now() < sessionExpiresAt;
+}
+
+function startSessionTimer(expiresInS) {
+  clearSessionTimer();
+  sessionExpiresAt = Date.now() + expiresInS * 1000;
+  sessionTimer = setTimeout(expireSession, expiresInS * 1000);
+}
+
+function clearSessionTimer() {
+  if (sessionTimer !== null) {
+    clearTimeout(sessionTimer);
+    sessionTimer = null;
+  }
+  sessionExpiresAt = 0;
+}
+
+function expireSession() {
+  sessionTimer = null;
+  clearSessionTimer();
+  api.clearSession();
+  setLoginMessage('', 'Your session expired. Sign in again.');
+  showView('login');
 }
 
 // ---------------------------------------------------------------------------
@@ -89,8 +130,26 @@ async function pollOnce() {
 }
 
 // ---------------------------------------------------------------------------
-// View rendering: TODO stubs. Signatures are fixed; fill in the bodies.
+// Login view
 // ---------------------------------------------------------------------------
+
+let lockoutEndsAt = 0; // Date.now() milliseconds; 0 means not locked out
+
+function isLockedOut() {
+  return Date.now() < lockoutEndsAt;
+}
+
+/**
+ * Show a message under the login form using a .state style from style.css.
+ * @param {string} state  data-state value ('' for the neutral style)
+ * @param {string} text   empty string hides the message
+ */
+function setLoginMessage(state, text) {
+  const msg = document.getElementById('login-message');
+  msg.dataset.state = state;
+  msg.textContent = text;
+  msg.hidden = !text;
+}
 
 /**
  * TODO(login view): wire #login-form submit -> api.login(); show
@@ -99,6 +158,10 @@ async function pollOnce() {
  * @param {HTMLElement} el  the login <section>
  */
 function renderLogin(el) {}
+
+// ---------------------------------------------------------------------------
+// View rendering: TODO stubs. Signatures are fixed; fill in the bodies.
+// ---------------------------------------------------------------------------
 
 /**
  * TODO(control view): fill #status-* fields; set #control-state to
