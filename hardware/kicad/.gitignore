@@ -1,0 +1,17 @@
+# Local-only KiCad project files. The repo root .gitignore already covers
+# *-backups/, *.kicad_prl, *.lck, fp-info-cache and _autosave-*.
+
+# Generated outputs: regenerate from the KiCad files. Gerbers for an actual
+# order can still be committed with `git add -f fab/...` (tag that commit).
+outputs/
+fab/
+
+# Scripts used to generate Rev A. Kept locally; rerunning them would overwrite
+# manual edits.
+scripts/
+
+# KiCad editor leftovers
+*-bak
+*.bak
+\#auto_saved_files\#
+~*

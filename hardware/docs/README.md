@@ -11,31 +11,57 @@ firmware component.
 
 ## Pinout
 
-**Nothing is assigned yet.** Fill these in, then update `docs/spi-protocol.md`
-§1 to match. Check each choice against the ESP32-S3 strapping pins and the
-pins the DevKitC-1 module reserves for flash and PSRAM before committing it.
+Defined by the PCB (KiCad project in [../kicad/](../kicad/), Rev A) and used
+unchanged on the breadboard demo (PCB requirement HW-12): **Board A and Board B
+use the same GPIO numbers.** Every pin below was checked against the ESP32-S3
+strapping pins (GPIO0, 3, 45, 46) and the pins the WROOM-1 module reserves for
+flash and PSRAM (GPIO26–32 always; GPIO35–37 too on octal-PSRAM R8 modules).
+None of the link pins is a strapping or reserved pin.
 
 ### Board A (station, SPI controller) ↔ Board B (bridge, SPI peripheral)
 
 | Signal | Board A GPIO | Board B GPIO | Direction | Notes |
 |---|---|---|---|---|
-| SCLK | TODO | TODO | A → B | ≤ 10 MHz |
-| MOSI | TODO | TODO | A → B | |
-| MISO | TODO | TODO | B → A | |
-| CS | TODO | TODO | A → B | |
-| Handshake | TODO | TODO | TODO | Meaning defined in spi-protocol.md |
-| GND | GND | GND | | Common ground required |
+| SCLK | 12 | 12 | A → B | FSPICLK (SPI2 IO_MUX pin). 33 Ω series at A (R10) |
+| MOSI | 11 | 11 | A → B | FSPID (SPI2 IO_MUX pin). 33 Ω series at A (R11) |
+| MISO | 13 | 13 | B → A | FSPIQ (SPI2 IO_MUX pin). 33 Ω series at B (R16) |
+| CS | 10 | 10 | A → B | FSPICS0 (SPI2 IO_MUX pin). 33 Ω series at A (R12). 10 kΩ pull-up at B (R15): idles deselected while A boots |
+| Handshake (HS) | 4 | 4 | B → A | Driven by B, input on A. Active high: B raises HS when it has data for A, and A then starts the transfer (ESP-IDF SPI peripheral handshake pattern). 33 Ω series at B (R17). 10 kΩ pull-down at A (R13): idles low while B boots, so A never sees a false "data ready" |
+| GND | GND | GND | | Common ground required. On the PCB this is the shared ground plane |
+
+Because SCLK, MOSI, MISO and CS sit on the SPI2 (FSPI) IO_MUX pins, firmware
+can use SPI2 without going through the GPIO matrix. HS is a plain GPIO.
+
+### Other pins used on both boards
+
+| Function | GPIO / pin | Notes |
+|---|---|---|
+| USB D− / D+ | GPIO19 / GPIO20 | Native USB: flashing and serial console. Each board has its own USB-C port; USB data never crosses between A and B |
+| BOOT | GPIO0 | Push button to GND (internal pull-up). Strapping pin, used for nothing else |
+| EN (reset) | EN | Push button to GND, 10 kΩ pull-up + 1 µF RC power-up delay |
+| UART0 TXD0 / RXD0 | GPIO43 / GPIO44 | Not used (console is native USB) |
+| Strapping GPIO3, GPIO45, GPIO46 | — | Left unconnected |
+
+All other GPIOs are unconnected on the PCB.
 
 ### Board C (target)
 
 | Function | GPIO | Notes |
 |---|---|---|
-| LED | TODO | On-board RGB LED, or external LED + resistor? |
+| LED | TODO | On-board RGB LED, or external LED + resistor? (Board C is not on the PCB) |
 
 ## Wiring
 
-TODO: wiring diagram (put the image in `docs/assets/` or here), wire lengths,
-connector type.
+- **PCB (Rev A):** the SPI and HS lines run about 75 mm between the modules on
+  the top layer over a solid ground plane, with 33 Ω source termination at the
+  driving end. Routing is good to well above 10 MHz (it doesn't limit the link
+  below 40 MHz).
+- **Breadboard demo:** wire GPIO*n* on Board A to GPIO*n* on Board B for each
+  row of the table above (10, 11, 12, 13, 4), plus GND. Fit the pull-up on CS at
+  Board B and the pull-down on HS at Board A (10 kΩ each) so the idle states
+  match the PCB.
+- TODO: wiring diagram (put the image in `docs/assets/` or here), wire lengths,
+  connector type.
 
 ## Bring-up checklist
 

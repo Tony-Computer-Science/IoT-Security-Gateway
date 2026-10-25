@@ -1,6 +1,6 @@
 # SPI inter-board protocol
 
-**Version: 0.0.0 (STUB, not yet designed)**
+**Version: 0.1.0 (DRAFT: physical layer pins defined, protocol not yet designed)**
 
 This document will define the only communication path between Board A
 (station, SPI **controller**) and Board B (bridge, SPI **peripheral**). Board A's
@@ -22,10 +22,10 @@ the link (see [CONTRIBUTING.md](../CONTRIBUTING.md#changes-to-shared-contracts))
 | Exact clock | TODO |
 | SPI mode (CPOL/CPHA) | TODO |
 | Bit order | TODO |
-| Pin assignments, Board A | TODO, defined in `hardware/docs/` |
-| Pin assignments, Board B | TODO, defined in `hardware/docs/` |
-| Handshake line direction and meaning | TODO (e.g. which board drives it, and whether it means "peripheral ready" or "response pending") |
-| Cable length and termination | TODO, see `hardware/` |
+| Pin assignments, Board A | SCLK GPIO12, MOSI GPIO11, MISO GPIO13, CS GPIO10 (the SPI2 IO_MUX pins), HS GPIO4, see `hardware/docs/` |
+| Pin assignments, Board B | Same GPIO numbers as Board A, see `hardware/docs/` |
+| Handshake line direction and meaning | Driven by Board B, input on Board A. Active high: B raises HS when it has data for A, and A then starts the transfer, so every transfer is initiated by A. Idles low (10 kΩ pull-down at A). TODO: exact timing (when B releases HS) |
+| Cable length and termination | PCB: ~75 mm traces, 33 Ω series at the driver (A on SCLK/MOSI/CS, B on MISO/HS); CS idles high (10 kΩ pull-up at B). Breadboard: TODO, see `hardware/` |
 
 ## 2. Frame format
 
@@ -82,4 +82,5 @@ target. Board A's timeout must be longer than Board B's, so Board A can report
 
 ## 7. Changelog
 
+- 0.1.0: §1 physical layer: pin assignments, handshake direction and idle state, and termination defined by the PCB (Rev A). Everything else unchanged.
 - 0.0.0: stub created. Nothing decided.

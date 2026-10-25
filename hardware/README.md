@@ -24,14 +24,15 @@ Carter Cattadoris. Any member may work here; the current owner reviews.
   connection between Board A and Board B (UART, shared USB hub to one host,
   etc.) may carry data in the final setup.
 
-Pin assignments are **not decided**. Record them in
-[docs/README.md](docs/README.md) first; firmware reads them from there.
+Pin assignments are recorded in [docs/README.md](docs/README.md) (set by the
+PCB, Rev A: SCLK 12, MOSI 11, MISO 13, CS 10, HS 4 on both boards). Firmware
+reads them from there.
 
 ## Opening the KiCad project
 
-Install [KiCad](https://www.kicad.org/) (TODO: agree on a team version, since
-newer KiCad files can't be opened by older versions). Open the `.kicad_pro`
-file in `kicad/` once it exists.
+Install [KiCad](https://www.kicad.org/) 10 (TODO: agree on a team version, since
+newer KiCad files can't be opened by older versions). Open
+`kicad/IoT-Gateway.kicad_pro`.
 
 Per-user and generated files (`*.kicad_prl`, `*-backups/`, `fp-info-cache`) are
 git-ignored.
