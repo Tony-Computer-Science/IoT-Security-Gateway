@@ -356,10 +356,18 @@ function renderControl(el) {
  *   uptime_s: number, seq: number}} status
  */
 function renderStatus(status) {
+  const wasHealthy = isHealthy();
   if (status.output === 'on' || status.output === 'off') shown.output = status.output;
   shown.target_reachable = status.target_reachable === true;
   shown.link_ok = status.link_ok === true;
   shown.uptime_s = typeof status.uptime_s === 'number' ? status.uptime_s : null;
+
+  // On the transition from healthy into a problem, clear the last command
+  // result: a green "Done" under a live failure would read as "all fine"
+  // (R6, R7). Only on the transition, so during normal operation a success
+  // stays visible. A command that failed with 502/503 has already marked
+  // `shown` unhealthy, so its more specific failure message is kept.
+  if (wasHealthy && !isHealthy()) setStateMessage('command-result', '', '');
 
   // Link down is checked first: if the boards cannot talk, Board A has no way
   // to know whether the target is reachable.
@@ -504,7 +512,8 @@ function startCommandCooldown(retryAfterS) {
     if (left <= 0) {
       stopCommandCooldownTimer();
       commandCooldownEndsAt = 0;
-      setStateMessage('command-result', '', 'You can send commands again.');
+      // Do not announce "send commands again" while the link or target is down.
+      setStateMessage('command-result', '', commandsAllowed() ? 'You can send commands again.' : '');
       renderShown();
       return;
     }
@@ -521,11 +530,14 @@ function stopCommandCooldownTimer() {
   }
 }
 
+function isHealthy() {
+  return shown.link_ok === true && shown.target_reachable === true;
+}
+
 // R7: commands are enabled only when the last status said both the link and
 // the target are up, and nothing else is blocking them.
 function commandsAllowed() {
-  return shown.link_ok === true && shown.target_reachable === true &&
-    Date.now() >= commandCooldownEndsAt;
+  return isHealthy() && Date.now() >= commandCooldownEndsAt;
 }
 
 function renderShown() {
