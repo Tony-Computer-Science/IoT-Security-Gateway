@@ -41,16 +41,19 @@
       <h2 id="control-heading">Device control</h2>
       <div class="card">
         <dl class="status-grid">
-          <dt>Output</dt>        <dd id="status-output">—</dd>
-          <dt>Target</dt>        <dd id="status-target">—</dd>
-          <dt>Gateway link</dt>  <dd id="status-link">—</dd>
-          <dt>Uptime</dt>        <dd id="status-uptime">—</dd>
+          <dt>LED output</dt>           <dd id="status-output">—</dd>
+          <dt>Target device</dt>        <dd id="status-target">—</dd>
+          <dt>Board-to-board link</dt>  <dd id="status-link">—</dd>
+          <dt>Gateway uptime</dt>       <dd id="status-uptime">—</dd>
         </dl>
+        <!-- Gateway health from the status poll (link down, target unreachable, poll errors). -->
         <p id="control-state" class="state" data-state="" role="status" hidden></p>
         <div class="actions">
-          <button type="button" data-action="led_on">Turn on</button>
-          <button type="button" data-action="led_off">Turn off</button>
+          <button type="button" data-action="led_on" disabled>Turn on</button>
+          <button type="button" data-action="led_off" disabled>Turn off</button>
         </div>
+        <!-- Result of the last command the user sent. -->
+        <p id="command-result" class="state" data-state="" role="status" hidden></p>
       </div>
       <button type="button" id="logout-btn" class="link-btn">Sign out</button>
     </section>
