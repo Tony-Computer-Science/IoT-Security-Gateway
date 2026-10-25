@@ -102,13 +102,22 @@ function expireSession() {
 // Status polling (fixed interval, no WebSocket)
 // ---------------------------------------------------------------------------
 
+// Rules:
+//   - At most one timer exists at a time (schedulePoll clears before setting).
+//   - At most one request is in flight at a time, poll OR command. A tick that
+//     finds a poll or a command in flight is skipped, not queued.
+//   - The next poll is scheduled only after the current one finishes, so a
+//     slow gateway slows polling down instead of stacking requests.
+
 let pollTimer = null;
 let polling = false;
+let pollInFlight = null; // Promise of the current poll, or null
+let commandInFlight = false; // set by the control view; pauses polling
 
 export function startPolling() {
   if (polling) return;
   polling = true;
-  pollOnce();
+  schedulePoll(0);
 }
 
 export function stopPolling() {
@@ -119,19 +128,31 @@ export function stopPolling() {
   }
 }
 
-// setTimeout chain rather than setInterval, so a slow response (e.g. injected
-// latency) never causes overlapping requests.
-async function pollOnce() {
+function schedulePoll(delayMs) {
+  if (pollTimer !== null) clearTimeout(pollTimer);
+  pollTimer = polling ? setTimeout(pollTick, delayMs) : null;
+}
+
+async function pollTick() {
   pollTimer = null;
   if (!polling) return;
-  if (api.hasSession() && !document.hidden) {
-    try {
-      renderStatus(await api.getStatus());
-    } catch (err) {
-      renderStatusError(err);
-    }
+  if (pollInFlight || commandInFlight || document.hidden || !api.hasSession()) {
+    schedulePoll(POLL_INTERVAL_MS); // skip this tick
+    return;
   }
-  if (polling) pollTimer = setTimeout(pollOnce, POLL_INTERVAL_MS);
+  pollInFlight = pollStatus();
+  await pollInFlight;
+  pollInFlight = null;
+  schedulePoll(POLL_INTERVAL_MS);
+}
+
+async function pollStatus() {
+  try {
+    const status = await api.getStatus();
+    if (polling) renderStatus(status);
+  } catch (err) {
+    if (polling) renderStatusError(err);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -338,13 +359,11 @@ function init() {
     btn.addEventListener('click', () => showView(btn.dataset.nav));
   }
 
-  // Poll immediately when the tab becomes visible again instead of waiting
-  // out the remaining interval.
+  // Poll right away when the tab becomes visible again instead of waiting out
+  // the remaining interval. pollTick skips if a request is already in flight,
+  // so this can never start a second, overlapping poll chain.
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && polling) {
-      stopPolling();
-      startPolling();
-    }
+    if (!document.hidden && polling) schedulePoll(0);
   });
 
   showView('login');
