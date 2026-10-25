@@ -1,6 +1,6 @@
 // Application bootstrap: view registry, show/hide switching, and the status
-// polling loop, session guard, and the login view. Control and events
-// rendering are still TODO stubs.
+// polling loop, session guard, and the login and control views. Events
+// rendering is still a TODO stub.
 //
 // No framework, no router: a view is a <section data-view="name"> toggled
 // with the `hidden` attribute.
@@ -301,32 +301,287 @@ function formatSeconds(s) {
 }
 
 // ---------------------------------------------------------------------------
-// View rendering: TODO stubs. Signatures are fixed; fill in the bodies.
+// Control view
 // ---------------------------------------------------------------------------
+//
+// NO OPTIMISTIC UPDATES (R6, R7). The displayed LED state changes only when a
+// gateway response reports the target's actual state: a 200 from
+// POST /api/command, or GET /api/status. Clicking a button never changes it.
+// If the display flipped on click, a command that then failed (link down,
+// target unreachable, rate limited, timeout) would look like it had worked:
+// the user would see "On" while the real LED is still off. R7 forbids a
+// failure ever appearing as a successful action, and R6 says a rejected
+// request leaves the target unchanged, so the display must stay unchanged too.
+
+const LINK_DOWN_TEXT =
+  'Board-to-board link is down: the station board cannot talk to the bridge board. Commands are disabled.';
+const TARGET_UNREACHABLE_TEXT =
+  'Target device unreachable: the bridge board cannot reach the IoT device. Commands are disabled.';
+const GATEWAY_UNREACHABLE_TEXT =
+  'Could not reach the gateway. Check your connection and try again.';
+
+// Last state reported by the gateway. null means "not known yet".
+const shown = { output: null, target_reachable: null, link_ok: null, uptime_s: null };
+let shownForSession = 0; // sessionExpiresAt of the session `shown` belongs to
+
+let controlWired = false;
+let commandCooldownEndsAt = 0; // Date.now() ms; set by a 429 rate_limited
+let commandCooldownTimer = null;
 
 /**
- * TODO(control view): fill #status-* fields; set #control-state to
- * link-down / target-unreachable when appropriate; disable command buttons
- * when !status.link_ok (R7).
+ * Called each time the control view is shown. Wires the buttons once.
+ * @param {HTMLElement} el  the control <section>
+ */
+function renderControl(el) {
+  if (!controlWired) {
+    for (const btn of el.querySelectorAll('[data-action]')) {
+      btn.addEventListener('click', () => onCommandClick(btn.dataset.action));
+    }
+    el.querySelector('#logout-btn').addEventListener('click', onLogoutClick);
+    controlWired = true;
+  }
+  // A new login must not show the previous session's state.
+  if (shownForSession !== sessionExpiresAt) {
+    shownForSession = sessionExpiresAt;
+    Object.assign(shown, { output: null, target_reachable: null, link_ok: null, uptime_s: null });
+    setStateMessage('control-state', '', '');
+    setStateMessage('command-result', '', '');
+  }
+  renderShown();
+}
+
+/**
+ * A successful status poll.
  * @param {{output: string, target_reachable: boolean, link_ok: boolean,
  *   uptime_s: number, seq: number}} status
  */
-function renderStatus(status) {}
+function renderStatus(status) {
+  if (status.output === 'on' || status.output === 'off') shown.output = status.output;
+  shown.target_reachable = status.target_reachable === true;
+  shown.link_ok = status.link_ok === true;
+  shown.uptime_s = typeof status.uptime_s === 'number' ? status.uptime_s : null;
+
+  // Link down is checked first: if the boards cannot talk, Board A has no way
+  // to know whether the target is reachable.
+  if (!shown.link_ok) {
+    setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
+  } else if (!shown.target_reachable) {
+    setStateMessage('control-state', 'target-unreachable', TARGET_UNREACHABLE_TEXT);
+  } else {
+    setStateMessage('control-state', '', '');
+    // A link or target failure from an earlier command has now cleared.
+    const last = document.getElementById('command-result').dataset.state;
+    if (last === 'link-down' || last === 'target-unreachable') {
+      setStateMessage('command-result', '', '');
+    }
+  }
+  renderShown();
+}
 
 /**
- * TODO(control view): map err.code to a .state style. invalid_session ->
- * stopPolling() and showView('login').
+ * A failed status poll. The last known state stays on screen; only the
+ * message changes, so a brief network glitch never blanks the view.
  * @param {api.ApiError} err
  */
-function renderStatusError(err) {}
+function renderStatusError(err) {
+  if (err.code === api.ErrorCode.INVALID_SESSION) {
+    sessionLost();
+    return;
+  }
+  const text =
+    err.code === api.ErrorCode.NETWORK || err.code === api.ErrorCode.TIMEOUT
+      ? GATEWAY_UNREACHABLE_TEXT
+      : `Status update failed (${err.code}).`;
+  setStateMessage('control-state', 'denied', `${text} Showing the last known state.`);
+}
 
-/**
- * TODO(control view): wire [data-action] buttons -> api.sendCommand();
- * show 'pending' while in flight, then ok / denied / rate-limited /
- * target-unreachable / link-down.
- * @param {HTMLElement} el  the control <section>
- */
-function renderControl(el) {}
+async function onCommandClick(action) {
+  if (commandInFlight || !commandsAllowed()) return;
+  if (!hasValidSession()) {
+    sessionLost();
+    return;
+  }
+
+  // Pause polling. pollTick skips while this flag is set.
+  commandInFlight = true;
+  renderShown(); // disables both buttons
+  // Pending shows what was asked for, never the result. The LED output row
+  // keeps showing the last confirmed state until the gateway answers.
+  setStateMessage('command-result', 'pending',
+    `Sending "${action === 'led_on' ? 'turn on' : 'turn off'}" to the device…`);
+
+  try {
+    // Never overlap with a poll: if one is in flight, wait for it to finish.
+    if (pollInFlight) await pollInFlight;
+    if (!hasValidSession() || !api.hasSession()) {
+      sessionLost();
+      return;
+    }
+    if (!commandsAllowed()) {
+      // The poll we just waited for reported a problem. Do not send.
+      setStateMessage('command-result', '', 'Command not sent. See the gateway status above.');
+      return;
+    }
+
+    const res = await api.sendCommand(action);
+    if (res.output !== 'on' && res.output !== 'off') {
+      throw new api.ApiError(api.ErrorCode.BAD_RESPONSE, 200);
+    }
+    // The only place a command changes the displayed output: a 200 whose body
+    // carries the state reported back from the target.
+    shown.output = res.output;
+    setStateMessage('command-result', 'ok', `Done. The LED is now ${res.output}.`);
+  } catch (err) {
+    handleCommandError(err); // never touches shown.output
+  } finally {
+    commandInFlight = false;
+    renderShown();
+    schedulePoll(POLL_INTERVAL_MS); // resume polling
+  }
+}
+
+/** @param {api.ApiError} err */
+function handleCommandError(err) {
+  const unchanged = 'The LED was not changed.';
+  switch (err.code) {
+    case api.ErrorCode.INVALID_ACTION:
+      setStateMessage('command-result', 'denied', `That command is not recognised. ${unchanged}`);
+      break;
+    case api.ErrorCode.NOT_PERMITTED:
+      setStateMessage('command-result', 'denied', `The gateway does not permit that command. ${unchanged}`);
+      break;
+    case api.ErrorCode.INVALID_SESSION:
+      sessionLost();
+      break;
+    case api.ErrorCode.RATE_LIMITED:
+      if (err.retryAfter !== null) startCommandCooldown(err.retryAfter);
+      else setStateMessage('command-result', 'rate-limited', `Too many commands. Wait and try again. ${unchanged}`);
+      break;
+    case api.ErrorCode.TARGET_UNREACHABLE:
+      // The response says the target is unreachable right now. Disable the
+      // buttons until a poll says otherwise. The output row is not touched.
+      shown.target_reachable = false;
+      setStateMessage('control-state', 'target-unreachable', TARGET_UNREACHABLE_TEXT);
+      setStateMessage('command-result', 'target-unreachable',
+        `Command not delivered: the bridge board could not reach the IoT device. ${unchanged}`);
+      break;
+    case api.ErrorCode.LINK_DOWN:
+      shown.link_ok = false;
+      setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
+      setStateMessage('command-result', 'link-down',
+        `Command not delivered: the station board cannot talk to the bridge board. ${unchanged}`);
+      break;
+    case api.ErrorCode.NETWORK:
+    case api.ErrorCode.TIMEOUT:
+      // The command may or may not have reached the gateway, so do not claim
+      // the LED was unchanged. The next poll shows the real state.
+      setStateMessage('command-result', 'denied',
+        `${GATEWAY_UNREACHABLE_TEXT} The result is unknown; the next status update will show the real state.`);
+      break;
+    default:
+      setStateMessage('command-result', 'denied',
+        `Command failed (${err.code}). The LED state shown is the last one the gateway confirmed.`);
+  }
+}
+
+// Rate-limit cooldown: same deadline-based countdown as the login lockout.
+function startCommandCooldown(retryAfterS) {
+  stopCommandCooldownTimer();
+  commandCooldownEndsAt = Date.now() + retryAfterS * 1000;
+
+  const text = document.createElement('span');
+  const seconds = document.createElement('span');
+  seconds.setAttribute('aria-live', 'off'); // announce once, not every second
+  seconds.textContent = formatSeconds(retryAfterS);
+  text.append('Too many commands. The LED was not changed. Try again in ', seconds, '.');
+  const msg = document.getElementById('command-result');
+  msg.dataset.state = 'rate-limited';
+  msg.replaceChildren(text);
+  msg.hidden = false;
+
+  commandCooldownTimer = setInterval(() => {
+    const left = Math.ceil((commandCooldownEndsAt - Date.now()) / 1000);
+    if (left <= 0) {
+      stopCommandCooldownTimer();
+      commandCooldownEndsAt = 0;
+      setStateMessage('command-result', '', 'You can send commands again.');
+      renderShown();
+      return;
+    }
+    const s = formatSeconds(left);
+    if (seconds.textContent !== s) seconds.textContent = s;
+  }, 250);
+  renderShown();
+}
+
+function stopCommandCooldownTimer() {
+  if (commandCooldownTimer !== null) {
+    clearInterval(commandCooldownTimer);
+    commandCooldownTimer = null;
+  }
+}
+
+// R7: commands are enabled only when the last status said both the link and
+// the target are up, and nothing else is blocking them.
+function commandsAllowed() {
+  return shown.link_ok === true && shown.target_reachable === true &&
+    Date.now() >= commandCooldownEndsAt;
+}
+
+function renderShown() {
+  const label = (v, yes, no) => (v === null ? 'Unknown' : v ? yes : no);
+  document.getElementById('status-output').textContent =
+    shown.output === null ? 'Unknown' : shown.output === 'on' ? 'On' : 'Off';
+  document.getElementById('status-target').textContent = label(shown.target_reachable, 'Reachable', 'Unreachable');
+  document.getElementById('status-link').textContent = label(shown.link_ok, 'Up', 'Down');
+  document.getElementById('status-uptime').textContent =
+    shown.uptime_s === null ? 'Unknown' : formatUptime(shown.uptime_s);
+
+  const disabled = commandInFlight || !commandsAllowed();
+  for (const btn of document.querySelectorAll('#view-control [data-action]')) {
+    btn.disabled = disabled;
+  }
+}
+
+/** Set a .state message; skips identical updates so screen readers are not spammed. */
+function setStateMessage(id, state, text) {
+  const msg = document.getElementById(id);
+  if (msg.dataset.state === state && msg.textContent === text && msg.hidden === !text) return;
+  msg.dataset.state = state;
+  msg.textContent = text;
+  msg.hidden = !text;
+}
+
+// 401 from a poll or a command: the gateway no longer knows this session.
+function sessionLost() {
+  stopPolling();
+  expireSession(); // shows "Your session expired. Sign in again."
+}
+
+async function onLogoutClick() {
+  stopPolling();
+  stopCommandCooldownTimer();
+  commandCooldownEndsAt = 0;
+  try {
+    await api.logout(); // clears the in-memory token even if the call fails
+  } catch {
+    // The token is gone locally either way.
+  }
+  clearSessionTimer();
+  setLoginMessage('', 'You have signed out.');
+  showView('login');
+}
+
+/** 3725 -> "1:02:05" */
+function formatUptime(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return `${h}:${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// ---------------------------------------------------------------------------
+// View rendering: TODO stubs. Signatures are fixed; fill in the bodies.
+// ---------------------------------------------------------------------------
 
 /**
  * TODO(events view): fetch with api.getEvents({outcome}) and render rows
