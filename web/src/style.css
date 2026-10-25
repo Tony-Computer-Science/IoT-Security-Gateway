@@ -9,6 +9,7 @@
   --space-4: 1.5rem;
   --radius: 6px;
   --max-width: 44rem;
+  --disabled-opacity: 0.45;
 
   --bg: #f6f7f9;
   --surface: #ffffff;
@@ -117,8 +118,20 @@ button {
   color: var(--text);
   cursor: pointer;
 }
-button:disabled { opacity: 0.55; cursor: not-allowed; }
 button[type="submit"], .actions button { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+/* Disabled must look disabled. Placed after the accent rule so it always
+   wins. Drops the accent fill and uses a dashed border, so the difference
+   does not depend on opacity or color alone. */
+button:disabled,
+button[type="submit"]:disabled,
+.actions button:disabled {
+  opacity: var(--disabled-opacity);
+  cursor: not-allowed;
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+}
 
 .link-btn {
   margin-top: var(--space-3);
