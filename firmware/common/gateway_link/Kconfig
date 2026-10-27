@@ -1,0 +1,18 @@
+menu "Gateway SPI link"
+config GW_SPI_CONTROLLER
+    bool "Build controller endpoint (Board A test application)"
+    default n
+config GW_BRIDGE_IP
+    string "Board B SPI IPv4 address"
+    default "192.168.77.1"
+config GW_HOST_IP
+    string "Board A SPI IPv4 address"
+    default "192.168.77.2"
+config GW_LINK_MASK
+    string "SPI network mask (must be /30)"
+    default "255.255.255.252"
+config GW_SPI_CLOCK_HZ
+    int "Controller SPI clock (Hz)"
+    range 100000 10000000
+    default 4000000
+endmenu

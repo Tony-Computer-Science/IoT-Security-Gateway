@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+set(IDF_TARGET "esp32s3" CACHE STRING "Gateway target")
+set(EXTRA_COMPONENT_DIRS "../common")
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(spi_test_host)
+if(NOT IDF_TARGET STREQUAL "esp32s3")
+    message(FATAL_ERROR "This board pinout requires ESP32-S3")
+endif()

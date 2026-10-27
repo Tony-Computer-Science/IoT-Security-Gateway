@@ -1,40 +1,19 @@
-# firmware/
+# Firmware
 
-ESP-IDF v5.x projects for the three ESP32-S3-DevKitC-1 boards. Each
-subdirectory is a separate, independently buildable ESP-IDF project.
-
-| Project | Board | Role |
+| Project | Role | Status |
 |---|---|---|
-| [station-board/](station-board/) | A | HTTPS gateway: Wi-Fi station, auth, policy, event log, SPI controller, serves web UI |
-| [bridge-board/](bridge-board/) | B | SPI peripheral, private AP, fixed-target HTTP client |
-| [target-device/](target-device/) | C | **Intentionally vulnerable** device under protection |
+| station-board | A, WPA2 AP/client DHCP/NAT to SPI | Implemented; hardware acceptance pending |
+| bridge-board | B, upstream Wi-Fi station, SPI peripheral, IPv4 NAPT | Implemented; hardware acceptance pending |
+| spi-test-host | Temporary A image, SPI controller and network tests | Implemented; Wi-Fi never initialized |
+| target-device | Legacy intentionally insecure LED target C | Unchanged scaffold; not part of routing |
+| common | Shared portable protocol and ESP-NETIF/SPI driver | Used by B and test host |
 
-## Current owner (provisional)
+Station, bridge and test-host use ESP-IDF **6.1** and ESP32-S3. The older target
+scaffold was documented for IDF 5.x and has not been migrated or validated in
+this milestone. See each project's README for commands. SSIDs and
+passwords belong in git-ignored sdkconfig, never tracked defaults. Generated
+binaries also contain configured credentials and must not be published.
 
-See each project's README. Station board: Goncalves and Lian. Bridge board and
-target device: Grande.
-
-## Build any project
-
-Requires [ESP-IDF v5.x](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/)
-with its environment loaded (`. $IDF_PATH/export.sh`).
-
-```sh
-cd firmware/<project>
-idf.py set-target esp32s3      # first time only
-idf.py build
-idf.py -p <PORT> flash monitor
-```
-
-`idf.py set-target` and `menuconfig` write `sdkconfig`, which is git-ignored
-because it may hold Wi-Fi credentials. Shared defaults go in
-`sdkconfig.defaults`, which is tracked and must never contain secrets.
-
-## Conventions
-
-- One ESP-IDF component per area of responsibility under `components/`. Each
-  has `CMakeLists.txt`, `include/<name>.h`, `<name>.c`, and a README.
-- `main/main.c` only boots and wires components together. Feature logic goes
-  in components.
-- Source comments describe *what* code does, never *who* owns it. Ownership
-  lives in READMEs and `.github/CODEOWNERS`.
+The [architecture](../docs/architecture.md) explains the intentional change
+from command-only isolation to outbound IPv4 routing. The SPI test host remains
+a separate diagnostic image without Wi-Fi; flash station-board onto A to use clients.

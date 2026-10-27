@@ -1,86 +1,81 @@
-# SPI inter-board protocol
+# SPI internet link
 
-**Version: 0.1.0 (DRAFT: physical layer pins defined, protocol not yet designed)**
+**Contract 0.2.0; wire version 2.** Replaces the unimplemented command protocol.
+A is controller; B is the Wi-Fi uplink/peripheral.
 
-This document will define the only communication path between Board A
-(station, SPI **controller**) and Board B (bridge, SPI **peripheral**). Board A's
-`spi_host` component implements one side and Board B's `spi_device` component
-the other.
+## Physical interface
 
-Everything marked **TODO** is undecided. Do not implement against guesses:
-resolve the TODO in this document first, through a PR reviewed by both sides of
-the link (see [CONTRIBUTING.md](../CONTRIBUTING.md#changes-to-shared-contracts)).
+Both ends use SPI2: SCLK 12, MOSI 11, MISO 13, CS 10, HS 4, common ground.
+Mode 0, MSB first, 4 MHz initially; 10 MHz maximum after hardware validation.
+Retain the PCB termination and CS pull-up/HS pull-down. HS now means **DMA
+transaction ready**, not payload available. B raises HS in post_setup_cb and
+lowers it in post_trans_cb, with only one queued transaction. A checks HS
+before every transfer, polls every 10 ms idle, and drains traffic immediately.
 
----
+## Framing
 
-## 1. Physical layer
+Every CS assertion clocks exactly 1600 bytes in both directions. Integers
+are little endian; IPv4 addresses in status are network-order octets. Unused
+bytes are zero. No SPI retransmissions (TCP handles loss; UDP may lose data).
+The peripheral allocates/configures 1604 bytes internally as an overrun guard:
+its reported transfer length saturates at its configured capacity. Only exactly
+12800 received bits are accepted; the guard is never part of a valid frame.
 
-| Item | Value |
-|---|---|
-| Signals | SCLK, MOSI, MISO, CS, plus one handshake line |
-| Max clock | ≤ 10 MHz |
-| Exact clock | TODO |
-| SPI mode (CPOL/CPHA) | TODO |
-| Bit order | TODO |
-| Pin assignments, Board A | SCLK GPIO12, MOSI GPIO11, MISO GPIO13, CS GPIO10 (the SPI2 IO_MUX pins), HS GPIO4, see `hardware/docs/` |
-| Pin assignments, Board B | Same GPIO numbers as Board A, see `hardware/docs/` |
-| Handshake line direction and meaning | Driven by Board B, input on Board A. Active high: B raises HS when it has data for A, and A then starts the transfer, so every transfer is initiated by A. Idles low (10 kΩ pull-down at A). TODO: exact timing (when B releases HS) |
-| Cable length and termination | PCB: ~75 mm traces, 33 Ω series at the driver (A on SCLK/MOSI/CS, B on MISO/HS); CS idles high (10 kΩ pull-up at B). Breadboard: TODO, see `hardware/` |
+| Offset | Bytes | Field |
+|---|---|---|
+| 0 | 4 | ASCII IGW2 |
+| 4 | 1 | Wire version 2 |
+| 5 | 1 | HELLO=1, STATUS=2, DATA=3, IDLE=4 |
+| 6 | 2 | Flags: MORE=1; others zero |
+| 8 | 2 | Payload length |
+| 10 | 2 | Reserved zero |
+| 12 | 4 | Sequence, starts at 1, strictly increasing within session |
+| 16 | 8 | Random nonzero sender session |
+| 24 | 8 | Observed peer session; zero only in initial HELLO |
+| 32 | 4 | CRC-32/ISO-HDLC over all 1600 bytes with this field zero |
+| 36 | 4 | Reserved zero |
+| 40 | 0–1514 | Payload, then zero padding |
 
-## 2. Frame format
+CRC reflected polynomial 0xedb88320, init/xorout 0xffffffff; `123456789`
+checks to 0xcbf43926. HELLO/IDLE payloads are empty. DATA is Ethernet without
+FCS, IPv4 or ARP only; no VLAN. IP MTU 1500. STATUS is exactly 56 bytes:
 
-TODO: define the byte layout. Questions it must answer:
+| Payload offset | Bytes | Field |
+|---|---|---|
+| 0 | 4 | Flags: associated=1, IPv4 acquired=2, forwarding=4, overlap=8, configuration error=16 |
+| 4, 8, 12, 16, 20 | 4 each | Upstream IP, mask, gateway, DNS1, DNS2 |
+| 24, 28, 32 | 4 each | SPI local IP, peer IP, mask |
+| 36, 40 | 4 each | Disconnect reason, current retry delay milliseconds |
+| 44, 48, 52 | 4 each | Valid frames received, rejected frames, dropped packets |
 
-- Fixed-size or length-prefixed frames? What is the maximum frame size?
-- Magic or start-of-frame marker?
-- Protocol version field?
-- Message type field and its allowed values?
-- Request ID, so a response can be matched to its request and stale responses
-  after a restart can be rejected (R7)?
-- Integrity check (CRC-16 / CRC-32)? Which polynomial?
-- Byte order for multi-byte fields?
+## Readiness and ownership
 
-| Offset | Size | Field | Notes |
-|---|---|---|---|
-| TODO | | | |
+Start with HELLO; exchange and echo session IDs before accepting DATA. Accept
+a new peer only via HELLO. Reject duplicate sequences and stale pairing IDs.
+An established peer changing closes the data gate and rotates the local
+session, preventing old frames from reopening the link. Rotate before sequence
+wrap. Two seconds without valid peer traffic invalidates the pairing.
+Upstream loss/address change also rotates B's session. Queued packets and DMA
+completions are tagged with their original pairing and cannot cross resets.
+CRC detects errors, not attacks: physical access to the link remains trusted.
 
-## 3. Message types
+B sends STATUS every 250 ms while paired, including offline. Forwarding means
+local route/NAT ready, not verified internet reachability. A enables its data
+netif only for matching STATUS with forwarding enabled and matching addresses.
+Each endpoint has eight TX packets and eight RX buffers. lwIP owns each RX
+buffer until its release callback. Exhaustion drops without blocking.
+Teardown closes data gates, disables/clears NAT while netif is up, then
+disconnects it. Control traffic continues.
 
-TODO: list every message. The minimum needed by the REST contract:
+## Addressing
 
-| Type | Direction | Purpose | Payload |
-|---|---|---|---|
-| TODO | A → B | Set output (on/off) | TODO |
-| TODO | A → B | Read status | TODO |
-| TODO | B → A | Result (ok + output state) | TODO |
-| TODO | B → A | Error (target unreachable, invalid frame) | TODO |
-| TODO | both | Link heartbeat / ready | TODO |
+Static SPI defaults: B 192.168.77.1, A 192.168.77.2, /30. Configure both builds
+identically. B NATs A onto upstream Wi-Fi; production A NATs its separate
+192.168.78.0/24 AP subnet onto its SPI address. No DHCP over SPI. STATUS supplies
+upstream DNS, which A advertises through its client DHCP service.
+IPv6, VLAN and port forwarding are excluded.
 
-Board B must reject any type that isn't in this table (R3).
+## Changelog
 
-## 4. Validation rules
-
-TODO: what each side checks before acting on a frame (length, type, CRC,
-version, request ID, payload values), and what it does with a bad frame:
-drop it, reply with an error, or count it toward a link fault.
-
-## 5. Link state and readiness (R7)
-
-TODO:
-
-- How each side decides the link is **ready**: handshake sequence at boot.
-- How a restart on either side is detected (e.g. boot nonce or epoch counter).
-- What happens to in-flight requests when a restart is detected. They must be
-  invalidated, never replayed.
-- Heartbeat interval and timeout before `link_ok` becomes false.
-
-## 6. Timing
-
-TODO: per-transaction timeout on Board A, and Board B's HTTP timeout to the
-target. Board A's timeout must be longer than Board B's, so Board A can report
-`target_unreachable` (502) rather than `link_down` (503).
-
-## 7. Changelog
-
-- 0.1.0: §1 physical layer: pin assignments, handshake direction and idle state, and termination defined by the PCB (Rev A). Everything else unchanged.
-- 0.0.0: stub created. Nothing decided.
+- 0.2.0: IPv4 Ethernet framing, sessions, status, timing, changed HS semantics.
+- 0.1.0: PCB pins defined; original command framing remained unspecified.

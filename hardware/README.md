@@ -20,7 +20,9 @@ Carter Cattadoris. Any member may work here; the current owner reviews.
 - Signals: SCLK, MOSI, MISO, CS, plus one handshake line, plus a common ground.
 - Clock: ≤ 10 MHz.
 - This wire is the **only** path between the user-side network and the target
-  network (see [docs/architecture.md](../docs/architecture.md)). No other
+  network (see [docs/architecture.md](../docs/architecture.md)). The router milestone
+  uses A as the private AP and B as the upstream Wi-Fi station; the existing
+  PCB labels describe the previous reversed roles. No other
   connection between Board A and Board B (UART, shared USB hub to one host,
   etc.) may carry data in the final setup.
 

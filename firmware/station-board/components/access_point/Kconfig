@@ -1,0 +1,27 @@
+menu "Station board WPA2 access point"
+config GW_AP_SSID
+    string "Access point SSID"
+    default "IoT-Gateway"
+config GW_AP_PASSWORD
+    string "WPA2 passphrase (8-63 bytes; never commit sdkconfig)"
+    default ""
+config GW_AP_IP
+    string "Private AP gateway IPv4 (RFC1918, /24, ending in .1)"
+    default "192.168.78.1"
+    help
+        Must not overlap the SPI link or Board B's upstream network.
+        DHCP uses .2 through .100 in this /24. Both boards keep their SPI
+        addresses configured under Gateway SPI link.
+config GW_AP_CHANNEL
+    int "2.4 GHz channel"
+    range 1 11
+    default 6
+config GW_AP_MAX_CLIENTS
+    int "Maximum associated devices"
+    range 1 10
+    default 4
+config GW_AP_LEASE_MINUTES
+    int "DHCP lease duration (minutes)"
+    range 2 1440
+    default 5
+endmenu

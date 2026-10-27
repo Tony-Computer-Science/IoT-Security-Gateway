@@ -1,0 +1,22 @@
+menu "SPI host network tests"
+config GW_TEST_DNS_NAME
+    string "DNS lookup name"
+    default "example.com"
+config GW_TEST_HTTPS_URL
+    string "HTTPS test URL (must use https://)"
+    default "https://example.com/"
+config GW_TEST_NTP_SERVER
+    string "NTP server for certificate validity checks"
+    default "pool.ntp.org"
+config GW_TEST_ECHO_HOST
+    string "TCP/UDP echo server host (empty skips echo tests)"
+    default ""
+config GW_TEST_ECHO_PORT
+    int "TCP/UDP echo server port"
+    range 1 65535
+    default 9000
+config GW_TEST_INTERVAL_S
+    int "Seconds between test rounds"
+    range 5 3600
+    default 30
+endmenu

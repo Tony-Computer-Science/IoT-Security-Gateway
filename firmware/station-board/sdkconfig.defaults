@@ -14,7 +14,16 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 
-# TODO(net_station): enable the HTTPS server when implementing it, e.g.
-#   CONFIG_ESP_HTTPS_SERVER_ENABLE=y
-# TODO(net_station): add the esp_littlefs managed component (idf_component.yml)
-#   when mounting the www partition.
+CONFIG_GW_SPI_CONTROLLER=y
+CONFIG_FREERTOS_HZ=1000
+CONFIG_LWIP_IP_FORWARD=y
+CONFIG_LWIP_IPV4_NAPT=y
+CONFIG_LWIP_IPV4_NAPT_PORTMAP=n
+CONFIG_LWIP_IPV6=n
+CONFIG_LWIP_TCPIP_TASK_STACK_SIZE=8192
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+CONFIG_LWIP_DHCPS=y
+CONFIG_LWIP_DHCPS_LEASE_UNIT=60
+CONFIG_LWIP_DHCPS_MAX_STATION_NUM=10
+
+# The www partition is retained for later UI work; no HTTP service is started.

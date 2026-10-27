@@ -1,5 +1,12 @@
-# ESP-IDF v5.x project: BOARD B (bridge board)
 cmake_minimum_required(VERSION 3.16)
-
+set(IDF_TARGET "esp32s3" CACHE STRING "Gateway target")
+set(EXTRA_COMPONENT_DIRS "../common")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(bridge_board)
+if(NOT IDF_TARGET STREQUAL "esp32s3")
+    message(FATAL_ERROR "This board pinout requires ESP32-S3")
+endif()
+# Reject direct upstream routes into the SPI subnet, including when NAT is off.
+idf_component_get_property(lwip_lib lwip COMPONENT_LIB)
+target_include_directories(${lwip_lib} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/components/bridge_router/include")
+target_compile_definitions(${lwip_lib} PRIVATE ESP_IDF_LWIP_HOOK_FILENAME="gateway_lwip_hooks.h")

@@ -1,0 +1,8 @@
+menu "Bridge upstream Wi-Fi"
+config GW_UPLINK_SSID
+    string "Upstream SSID (2.4 GHz personal Wi-Fi)"
+    default ""
+config GW_UPLINK_PASSWORD
+    string "Upstream WPA2/WPA3 passphrase (never commit sdkconfig)"
+    default ""
+endmenu

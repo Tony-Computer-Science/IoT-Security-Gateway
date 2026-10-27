@@ -26,7 +26,7 @@ None of the link pins is a strapping or reserved pin.
 | MOSI | 11 | 11 | A → B | FSPID (SPI2 IO_MUX pin). 33 Ω series at A (R11) |
 | MISO | 13 | 13 | B → A | FSPIQ (SPI2 IO_MUX pin). 33 Ω series at B (R16) |
 | CS | 10 | 10 | A → B | FSPICS0 (SPI2 IO_MUX pin). 33 Ω series at A (R12). 10 kΩ pull-up at B (R15): idles deselected while A boots |
-| Handshake (HS) | 4 | 4 | B → A | Driven by B, input on A. Active high: B raises HS when it has data for A, and A then starts the transfer (ESP-IDF SPI peripheral handshake pattern). 33 Ω series at B (R17). 10 kΩ pull-down at A (R13): idles low while B boots, so A never sees a false "data ready" |
+| Handshake (HS) | 4 | 4 | B → A | Driven by B, input on A. Active high: B raises HS only when a DMA transaction is ready, even if it contains no data; A polls and starts the transfer (SPI contract 0.2.0). 33 Ω series at B (R17). 10 kΩ pull-down at A (R13): idles low while B boots, so A never sees a false "data ready" |
 | GND | GND | GND | | Common ground required. On the PCB this is the shared ground plane |
 
 Because SCLK, MOSI, MISO and CS sit on the SPI2 (FSPI) IO_MUX pins, firmware
