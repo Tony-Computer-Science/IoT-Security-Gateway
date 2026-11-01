@@ -108,20 +108,35 @@ function expireSession() {
 //     finds a poll or a command in flight is skipped, not queued.
 //   - The next poll is scheduled only after the current one finishes, so a
 //     slow gateway slows polling down instead of stacking requests.
+//   - There is one loop for the whole app. Each view that needs refreshing
+//     passes its own task to startPolling (status for control, the event log
+//     for events), so two views can never refresh at the same time.
 
 let pollTimer = null;
 let polling = false;
 let pollInFlight = null; // Promise of the current poll, or null
 let commandInFlight = false; // set by the control view; pauses polling
+let pollTask = null; // async (isCurrent) => void, the active view's refresh
+let pollGeneration = 0; // bumped on start/stop so late results are dropped
+let rerunWhenFree = false; // an immediate poll was skipped; run it next
+let nextTickImmediate = false; // the pending timer was set with delay 0
 
-export function startPolling() {
-  if (polling) return;
+/**
+ * @param {(isCurrent: () => boolean) => Promise<void>} [task]  refresh to
+ *   run each tick. It must only apply its result while isCurrent() is true.
+ */
+export function startPolling(task = pollStatus) {
+  if (polling && pollTask === task) return;
+  stopPolling();
   polling = true;
+  pollTask = task;
   schedulePoll(0);
 }
 
 export function stopPolling() {
   polling = false;
+  pollTask = null;
+  pollGeneration++;
   if (pollTimer !== null) {
     clearTimeout(pollTimer);
     pollTimer = null;
@@ -130,28 +145,44 @@ export function stopPolling() {
 
 function schedulePoll(delayMs) {
   if (pollTimer !== null) clearTimeout(pollTimer);
+  nextTickImmediate = delayMs === 0;
   pollTimer = polling ? setTimeout(pollTick, delayMs) : null;
 }
 
 async function pollTick() {
   pollTimer = null;
   if (!polling) return;
-  if (pollInFlight || commandInFlight || document.hidden || !api.hasSession()) {
+  if (pollInFlight || commandInFlight) {
+    // Skip this tick. If it was meant to run now (view just opened, filter
+    // changed), run it as soon as the request in flight finishes.
+    if (nextTickImmediate) rerunWhenFree = true;
+    schedulePoll(POLL_INTERVAL_MS);
+    return;
+  }
+  if (document.hidden || !api.hasSession()) {
     schedulePoll(POLL_INTERVAL_MS); // skip this tick
     return;
   }
-  pollInFlight = pollStatus();
+  const gen = pollGeneration;
+  rerunWhenFree = false;
+  pollInFlight = pollTask(() => polling && gen === pollGeneration);
   await pollInFlight;
   pollInFlight = null;
-  schedulePoll(POLL_INTERVAL_MS);
+  schedulePoll(rerunWhenFree ? 0 : POLL_INTERVAL_MS);
 }
 
-async function pollStatus() {
+/** Run the active view's refresh as soon as no request is in flight. */
+function pollNow() {
+  if (pollInFlight || commandInFlight) rerunWhenFree = true;
+  else schedulePoll(0);
+}
+
+async function pollStatus(isCurrent) {
   try {
     const status = await api.getStatus();
-    if (polling) renderStatus(status);
+    if (isCurrent()) renderStatus(status);
   } catch (err) {
-    if (polling) renderStatusError(err);
+    if (isCurrent()) renderStatusError(err);
   }
 }
 
