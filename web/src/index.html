@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,6 +17,8 @@
       <button type="button" class="nav-btn" data-nav="control">Control</button>
       <button type="button" class="nav-btn" data-nav="events">Events</button>
     </nav>
+    <!-- Light on every load; the choice is never saved (see web-design.md). -->
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false">Dark theme</button>
   </header>
 
   <!-- Global notice area for errors and state changes. Announced to screen readers. -->

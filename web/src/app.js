@@ -798,6 +798,23 @@ function restoreScrollAnchor(tbody, anchor) {
 }
 
 // ---------------------------------------------------------------------------
+// Theme toggle (presentation only)
+// ---------------------------------------------------------------------------
+
+// Light is the default on every page load: the demo is projected and light
+// was tested for that, so the demo must not depend on the laptop's theme.
+// Dark is a deliberate manual choice. It is never saved (no storage, no
+// cookie), so a reload always returns to light.
+function initThemeToggle() {
+  const btn = document.getElementById('theme-toggle');
+  btn.addEventListener('click', () => {
+    const dark = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', String(dark));
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
 
@@ -820,6 +837,7 @@ function init() {
   for (const btn of document.querySelectorAll('[data-nav]')) {
     btn.addEventListener('click', () => showView(btn.dataset.nav));
   }
+  initThemeToggle();
 
   // Poll right away when the tab becomes visible again instead of waiting out
   // the remaining interval. pollTick skips if a request is already in flight,
