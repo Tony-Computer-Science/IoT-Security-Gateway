@@ -579,6 +579,17 @@ function renderShown() {
   document.getElementById('status-uptime').textContent =
     shown.uptime_s === null ? 'Unknown' : formatUptime(shown.uptime_s);
 
+  // Presentation hooks for CSS (the LED lamp and the signal-path wires).
+  // CONFIRMED STATE ONLY: these read `shown`, which is written only from
+  // gateway responses, never from the action the user requested. This
+  // function also runs when a click starts a command (to disable the
+  // buttons); at that moment `shown` still holds the last confirmed state,
+  // so the lamp does not change. Setting data-value from the requested
+  // action would be an optimistic update and would break R7.
+  document.getElementById('status-output').dataset.value = shown.output ?? 'unknown';
+  document.getElementById('status-target').dataset.value = label(shown.target_reachable, 'reachable', 'unreachable').toLowerCase();
+  document.getElementById('status-link').dataset.value = label(shown.link_ok, 'up', 'down').toLowerCase();
+
   const disabled = commandInFlight || !commandsAllowed();
   for (const btn of document.querySelectorAll('#view-control [data-action]')) {
     btn.disabled = disabled;
