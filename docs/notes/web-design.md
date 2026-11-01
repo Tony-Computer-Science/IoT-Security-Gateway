@@ -8,35 +8,45 @@ Make the device's state and the gateway's health unmistakable from the back
 of a lecture room, and make a blocked command visible the moment it happens.
 It is styled like lab test equipment, not like a website.
 
-## Light, not dark
+## Light by default, dark by choice
 
 A projector cannot show black: a dark page projects as grey haze and light
 text blurs. Dark ink on a light panel stays sharp, even in a black and white
-photo. Automatic dark mode was removed so the laptop's settings cannot change
-what the audience sees.
+photo, so light is what we tested for the demo. The page therefore opens in
+light on every load, whatever theme the laptop is in. A header switch offers
+dark for operators who want it. The choice is deliberately not saved (no
+storage, no cookie): a reload always returns to light, so the demo can never
+start in a theme nobody tested.
 
 ## Palette and type
 
-Six base colours: case grey, an off-white faceplate, near-black ink (17.6:1
-contrast), dark grey labels, mid grey wires, and one blue used only for the
-keyboard focus ring, so blue never suggests a status. Fonts are the
-computer's own, since the page runs offline from the board's flash.
-Character comes from size and weight: status values are 40 pixel bold
-monospace capitals, and labels are small spaced capitals like the printing
-on an instrument panel.
+Six base colours: case grey, an off-white faceplate, near-black ink, dark
+grey labels, mid grey wires, and one blue used only for the keyboard focus
+ring, so blue never suggests a status. Dark mode swaps the same six roles.
+Fonts are the computer's own, since the page runs offline from the board's
+flash; character comes from size and weight, with labels in small spaced
+capitals like instrument panel printing.
 
-## The signal path
+## Hierarchy on the control view
 
-The three status values sit on a drawing of the real hardware:
-Board A, the SPI wire, Board B, the Wi-Fi hop, and the device C. The wire is
-a double line (a bus); the radio hop is dotted. A failed hop changes
-colour, opens a gap, and shows the failure icon, so the audience sees
-*where* the failure is. In a narrow window the path turns vertical.
+The first version gave each segment two labels above its value, the values
+sat at different heights, and the LED was squeezed into a corner. Now:
+
+- **One unit, one label, one value.** The medium ("SPI wire, station board A
+  to bridge board B") is small print beneath the value, not a second heading.
+- **One row of readouts.** All three values are the same size and weight and
+  share one baseline, so the eye scans a single line.
+- **The output is not an afterthought.** The LED has the same weight as the
+  other two, and its keys and command result sit directly beneath it.
+- **The diagram recedes.** The A, B, C boxes and wires are small, grey and
+  thin, because they answer "where?" only when something fails. A failed hop
+  then takes its state colour, opens a gap, and shows the failure icon.
+- **Health comes first.** A failure message sits at the top of the panel.
 
 ## The six states (requirements R6 and R7)
 
-Each state differs in icon shape and border pattern, not only colour, so all
-six stay distinct when projected badly or printed in grayscale:
+Each state differs in icon and pattern, not only colour, so all six stay
+distinct when projected badly or printed in grayscale, in both themes:
 
 | State | Icon | Pattern |
 |---|---|---|
@@ -53,26 +63,18 @@ they differ in icon, pattern, colour, and position on the path.
 
 ## The LED lamp follows confirmed state only
 
-The LED lamp is filled when on and hollow when off. CSS reads it from a
-`data-value` attribute that the code sets only from the gateway's answer,
-never from the button pressed, so during a command it keeps the last
-confirmed state. Lighting it on the click would be an optimistic update,
-and R7 says a failed command must never look like it worked.
-
-## HOLD
-
-When a status update fails, the last known values stay and get a HOLD tag,
-borrowed from multimeters that freeze a reading.
+The lamp is filled when on and hollow when off. CSS reads it from a
+`data-value` attribute set only from the gateway's answer, never from the
+button pressed. Lighting it on the click would be an optimistic update, and
+R7 says a failed command must never look like it worked. When a status
+update fails, values stay with a HOLD tag, like a multimeter's frozen reading.
 
 ## Icons, motion, and access
 
-- Icons are hand-drawn SVG, no library. Five are in the page; the six state
-  icons are in the stylesheet, because the code writes the state text and
-  would erase anything inside it. Each is hidden from screen readers and
-  sits next to text.
-- The only motion confirms a user action: keys move when pressed, and the
-  pending dots pulse. Both stop under reduced motion.
-- Every control shows a thick blue keyboard focus ring. Disabled buttons lose
-  their fill and get a dashed edge.
+- Hand-drawn SVG icons, no library, each hidden from screen readers and next
+  to text. The six state icons live in the stylesheet because the code writes
+  the state text and would erase anything inside it.
+- Motion only confirms a user action (key travel, pending pulse) and stops
+  under reduced motion. Every control has a thick keyboard focus ring.
 
-The whole interface is 11.3 KB gzipped, under a fifth of its 60 KB budget.
+The whole interface is 11.8 KB gzipped, under a fifth of its 60 KB budget.
