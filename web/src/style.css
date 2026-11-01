@@ -159,6 +159,19 @@ button[type="submit"]:disabled,
 .events-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .events-table th, .events-table td { text-align: left; padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--border); }
 .events-table td:first-child, .events-table td:nth-child(2) { font-family: var(--font-mono); }
+.events-table td { vertical-align: top; }
+/* The view restores the reader's position itself after each refresh, so the
+   browser's own scroll anchoring must not adjust it a second time. */
+.events-table { overflow-anchor: none; }
+/* Outcome badges reuse the .state styles (same color, glyph, and border as
+   the control view); this only makes them compact enough for a table cell. */
+.events-table .state {
+  display: inline-flex;
+  margin: 0;
+  padding: 0 var(--space-2);
+  gap: var(--space-1);
+  white-space: nowrap;
+}
 
 /* ---------------------------------------------------------------------------
    State styles: <el class="state" data-state="...">Label text</el>

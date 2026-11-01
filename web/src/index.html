@@ -72,7 +72,11 @@
           </select>
           <button type="button" id="events-refresh">Refresh</button>
         </div>
-        <div class="table-wrap">
+        <!-- Refresh errors, shown beside the last loaded list. -->
+        <p id="events-state" class="state" data-state="" role="status" hidden></p>
+        <!-- Shown instead of the table when the log (or the filter) has no entries. -->
+        <p id="events-empty" class="state" data-state="" hidden></p>
+        <div class="table-wrap" id="events-table-wrap" hidden>
           <table class="events-table">
             <thead>
               <tr><th scope="col">#</th><th scope="col">Uptime</th><th scope="col">Type</th><th scope="col">Outcome</th><th scope="col">Detail</th></tr>
