@@ -1,6 +1,5 @@
 // Application bootstrap: view registry, show/hide switching, and the status
-// polling loop, session guard, and the login and control views. Events
-// rendering is still a TODO stub.
+// polling loop, session guard, and the login, control, and events views.
 //
 // No framework, no router: a view is a <section data-view="name"> toggled
 // with the `hidden` attribute.
@@ -623,16 +622,169 @@ function formatUptime(s) {
 }
 
 // ---------------------------------------------------------------------------
-// View rendering: TODO stubs. Signatures are fixed; fill in the bodies.
+// Events view
 // ---------------------------------------------------------------------------
+//
+// Shows the gateway's bounded event log (R5), newest first. This view has no
+// timer of its own: while it is open, the shared poll loop runs pollEvents
+// instead of the status poll, so an events refresh and a status poll can
+// never be in flight at the same time.
+
+const EVENT_TYPE_LABELS = { auth: 'Auth', command: 'Command', rate_limit: 'Rate limit', target: 'Target' };
+
+let eventsWired = false;
+let eventsLoaded = false; // a list has been shown for this session
+let eventsKey = null; // filter + seqs currently on screen; skips no-op redraws
+let eventsForSession = 0; // sessionExpiresAt of the session the list belongs to
 
 /**
- * TODO(events view): fetch with api.getEvents({outcome}) and render rows
- * into #events-body using textContent only (never innerHTML: `detail` is
- * server-provided text).
+ * Called each time the events view is shown. Wires the controls once and
+ * hands the shared poll loop the events refresh.
  * @param {HTMLElement} el  the events <section>
  */
-function renderEvents(el) {}
+function renderEvents(el) {
+  if (!eventsWired) {
+    el.querySelector('#events-outcome').addEventListener('change', () => {
+      eventsKey = null;
+      setStateMessage('events-state', 'pending', 'Loading events…');
+      pollNow();
+    });
+    el.querySelector('#events-refresh').addEventListener('click', pollNow);
+    eventsWired = true;
+  }
+  // A new login must not show the previous session's log.
+  if (eventsForSession !== sessionExpiresAt) {
+    eventsForSession = sessionExpiresAt;
+    eventsLoaded = false;
+    eventsKey = null;
+    document.getElementById('events-body').replaceChildren();
+    document.getElementById('events-table-wrap').hidden = true;
+    document.getElementById('events-empty').hidden = true;
+  }
+  if (!eventsLoaded) setStateMessage('events-state', 'pending', 'Loading events…');
+  startPolling(pollEvents);
+}
+
+// Filtering is done by the gateway (?outcome=), not in the browser, so the
+// list is always what the gateway actually holds for that outcome.
+async function pollEvents(isCurrent) {
+  const outcome = document.getElementById('events-outcome').value;
+  try {
+    const data = await api.getEvents(outcome ? { outcome } : {});
+    // The filter changed while this request was in flight: drop the result.
+    // The change handler already asked for a fresh poll.
+    if (!isCurrent() || outcome !== document.getElementById('events-outcome').value) return;
+    if (!Array.isArray(data.events)) throw new api.ApiError(api.ErrorCode.BAD_RESPONSE, 200);
+    showEvents(data.events, outcome);
+  } catch (err) {
+    if (isCurrent()) renderEventsError(err);
+  }
+}
+
+/**
+ * A failed refresh. Like a failed status poll, the last loaded list stays on
+ * screen and the error is shown beside it.
+ * @param {api.ApiError} err
+ */
+function renderEventsError(err) {
+  if (err.code === api.ErrorCode.INVALID_SESSION) {
+    sessionLost();
+    return;
+  }
+  const text =
+    err.code === api.ErrorCode.NETWORK || err.code === api.ErrorCode.TIMEOUT
+      ? GATEWAY_UNREACHABLE_TEXT
+      : `Event log refresh failed (${err.code}).`;
+  const after = eventsLoaded ? 'Showing the last loaded list.' : 'No events loaded yet.';
+  setStateMessage('events-state', 'denied', `${text} ${after}`);
+}
+
+function showEvents(events, outcome) {
+  setStateMessage('events-state', '', '');
+  eventsLoaded = true;
+
+  const list = events.slice().sort((a, b) => b.seq - a.seq); // newest first
+  const key = `${outcome}:${list.map((e) => e.seq).join(',')}`;
+  if (key === eventsKey) return; // nothing new: leave the DOM alone
+  eventsKey = key;
+
+  const empty = document.getElementById('events-empty');
+  const wrap = document.getElementById('events-table-wrap');
+  const tbody = document.getElementById('events-body');
+
+  if (list.length === 0) {
+    empty.textContent = outcome
+      ? `No ${outcome} events have been recorded yet.`
+      : 'No events have been recorded yet.';
+    empty.hidden = false;
+    wrap.hidden = true;
+    tbody.replaceChildren();
+    return;
+  }
+
+  const anchor = captureScrollAnchor(tbody);
+  tbody.replaceChildren(...list.map(eventRow));
+  empty.hidden = true;
+  wrap.hidden = false;
+  restoreScrollAnchor(tbody, anchor);
+}
+
+// All server text goes in with textContent, never innerHTML: `detail` comes
+// from the gateway and must not be able to inject markup.
+function eventRow(ev) {
+  const tr = document.createElement('tr');
+  tr.dataset.seq = String(ev.seq);
+  const cell = (text) => {
+    const td = document.createElement('td');
+    td.textContent = text;
+    return td;
+  };
+  const badge = document.createElement('span');
+  badge.className = 'state';
+  badge.dataset.state = eventState(ev);
+  badge.textContent = ev.outcome;
+  const outcomeCell = document.createElement('td');
+  outcomeCell.append(badge);
+
+  tr.append(
+    cell(String(ev.seq)),
+    cell(typeof ev.uptime_s === 'number' ? formatUptime(ev.uptime_s) : '?'),
+    cell(EVENT_TYPE_LABELS[ev.type] || String(ev.type)),
+    outcomeCell,
+    cell(String(ev.detail)),
+  );
+  return tr;
+}
+
+// Outcome badges reuse the control view's state styles. An alert takes the
+// style of whatever raised it, so a rate-limit alert looks like the
+// rate-limited state and a target alert looks like target-unreachable.
+function eventState(ev) {
+  if (ev.outcome === 'allowed') return 'ok';
+  if (ev.outcome === 'alert' && ev.type === 'rate_limit') return 'rate-limited';
+  if (ev.outcome === 'alert' && ev.type === 'target') return 'target-unreachable';
+  return 'denied';
+}
+
+// Scroll preservation. Before redrawing, note which row is at the top of the
+// screen and where; afterwards, scroll so that same row is in the same place.
+// New events then appear above the reader without moving what they are
+// reading. At the very top of the page nothing is anchored, so new events
+// stay visible as they arrive.
+function captureScrollAnchor(tbody) {
+  if (window.scrollY === 0) return null;
+  for (const row of tbody.rows) {
+    const r = row.getBoundingClientRect();
+    if (r.bottom > 0) return { seq: row.dataset.seq, top: r.top };
+  }
+  return null;
+}
+
+function restoreScrollAnchor(tbody, anchor) {
+  if (!anchor) return;
+  const row = tbody.querySelector(`tr[data-seq="${anchor.seq}"]`);
+  if (row) window.scrollBy(0, row.getBoundingClientRect().top - anchor.top);
+}
 
 // ---------------------------------------------------------------------------
 // Bootstrap
@@ -651,6 +803,7 @@ function init() {
   });
   registerView('events', {
     onShow: () => renderEvents(views.events.el),
+    onHide: stopPolling,
   });
 
   for (const btn of document.querySelectorAll('[data-nav]')) {
