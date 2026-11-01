@@ -35,7 +35,7 @@
   --space-5: 2.5rem;
   --radius: 2px;
   --max-width: 72rem;
-  --node: 3.25rem;
+  --node-sm: 1.75rem;
   --disabled-opacity: 0.6;
 
   /* State glyphs, 24x24, stroked. Drawn in currentColor through mask-image. */
@@ -226,7 +226,9 @@ button:disabled,
 .login-panel .key { margin-top: var(--space-3); }
 
 /* ---------------------------------------------------------------------------
-   Control view: the signal path A ==SPI== B ~~Wi-Fi~~ C
+   Control view: one row of three readouts on the signal path A-B-C
+   Hierarchy: values first (one size, one baseline), then their labels, then
+   the path strip, which is context and deliberately quiet until it breaks.
    --------------------------------------------------------------------------- */
 .uptime { display: flex; align-items: baseline; gap: 0.75rem; margin: 0; }
 .uptime dd {
@@ -235,103 +237,114 @@ button:disabled,
   font-variant-numeric: tabular-nums;
 }
 
+/* Three equal units. Subgrid puts every unit's strip, label, value, medium,
+   keys, and result on shared rows, so the three values share one baseline
+   even when a label wraps. */
 .path {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
-  align-items: start;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(6, auto);
 }
+.unit {
+  display: grid;
+  grid-row: span 6;
+  grid-template-rows: subgrid;
+  min-width: 0;
+  padding-right: var(--space-4);
+}
+.unit:last-child { padding-right: 0; }
+.unit + .unit { padding-left: var(--space-4); }
 
-.node {
+/* The path strip: small, grey, thin. It only gets loud when a hop fails. */
+.seg {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--space-1);
-  text-align: center;
+  height: var(--node-sm);
+  /* run the wire through the unit's padding to the next unit's node */
+  margin-right: calc(-1 * var(--space-4));
 }
+.unit + .unit .seg { margin-left: calc(-1 * var(--space-4)); }
+.unit:last-child .seg { margin-right: 0; }
 .node-box {
   display: grid;
   place-items: center;
-  width: var(--node);
-  height: var(--node);
-  border: 3px solid var(--ink);
+  flex: none;
+  width: var(--node-sm);
+  height: var(--node-sm);
+  border: 2px solid var(--rule);
   border-radius: var(--radius);
   background: var(--faceplate);
-  font: 800 1.5rem/1 var(--font-mono);
-}
-.node-name { max-width: 7rem; }
-
-.hop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 0;
-  padding-inline: var(--space-2);
+  color: var(--legend);
+  font: 700 0.875rem/1 var(--font-mono);
 }
 
-/* The wire. Its pattern names the medium: a double line for the SPI bus,
-   dots for the radio hop. A failed hop changes colour, gets a gap, and shows
+/* The wire's pattern names the medium: double line for the SPI bus, dots for
+   the radio hop. A failed hop takes its state colour, opens a gap, and shows
    the same icon as the health message. */
-.hop-link { --wire: 6px double var(--ink); }
-.hop-target { --wire: 6px dotted var(--ink); }
-.hop:has(dd[data-value="unknown"]) { --wire: 3px dashed var(--rule); }
-.hop-link:has(#status-link[data-value="down"]) { --wire: 6px double var(--linkdown); }
-.hop-target:has(#status-target[data-value="unreachable"]) { --wire: 6px dotted var(--unreachable); }
+.unit-link { --wire: 4px double var(--rule); }
+.unit-target { --wire: 3px dotted var(--rule); }
+.unit:has(dd[data-value="unknown"]) { --wire: 2px dashed var(--rule); }
+.unit-link:has(#status-link[data-value="down"]) { --wire: 4px double var(--linkdown); }
+.unit-target:has(#status-target[data-value="unreachable"]) { --wire: 4px dotted var(--unreachable); }
 
 .wire {
   position: relative;
-  align-self: stretch;
+  flex: 1;
   height: 0;
-  margin-top: calc(var(--node) / 2 - 3px);
   border-top: var(--wire);
 }
-.hop-link:has(#status-link[data-value="down"]) .wire::before,
-.hop-target:has(#status-target[data-value="unreachable"]) .wire::before {
+.unit-link:has(#status-link[data-value="down"]) .wire::before,
+.unit-target:has(#status-target[data-value="unreachable"]) .wire::before,
+.unit-link:has(#status-link[data-value="down"]) .wire::after,
+.unit-target:has(#status-target[data-value="unreachable"]) .wire::after {
   content: "";
   position: absolute;
   left: 50%;
-  top: -3px;
-  width: 3.25rem;
-  height: 1.5rem;
+  top: -2px;
   transform: translate(-50%, -50%);
+}
+.unit-link:has(#status-link[data-value="down"]) .wire::before,
+.unit-target:has(#status-target[data-value="unreachable"]) .wire::before {
+  width: 2.75rem;
+  height: 1.25rem;
   background: var(--faceplate);
 }
-.hop-link:has(#status-link[data-value="down"]) .wire::after,
-.hop-target:has(#status-target[data-value="unreachable"]) .wire::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: -3px;
-  width: 2.25rem;
-  height: 2.25rem;
-  transform: translate(-50%, -50%);
+.unit-link:has(#status-link[data-value="down"]) .wire::after,
+.unit-target:has(#status-target[data-value="unreachable"]) .wire::after {
+  width: 1.75rem;
+  height: 1.75rem;
   background-color: var(--linkdown);
   -webkit-mask: var(--i-link-down) center / contain no-repeat;
   mask: var(--i-link-down) center / contain no-repeat;
 }
-.hop-target:has(#status-target[data-value="unreachable"]) .wire::after {
+.unit-target:has(#status-target[data-value="unreachable"]) .wire::after {
   background-color: var(--unreachable);
   -webkit-mask-image: var(--i-target);
   mask-image: var(--i-target);
 }
 
-.readout { margin: var(--space-3) 0 0; text-align: center; }
+/* One unit = one label, one value, and the medium as small print beneath. */
+.readout {
+  grid-row: span 3;
+  display: grid;
+  grid-template-rows: subgrid;
+  margin: 0;
+}
 .readout dt {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
   gap: 0.4rem;
+  margin-top: var(--space-3);
 }
-.readout .medium {
-  flex-basis: 100%;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-.readout dd {
-  margin: var(--space-2) 0 0;
+.readout dd { margin: 0; }
+#status-link,
+#status-target,
+#status-output {
+  justify-self: start;
+  margin: var(--space-2) 0 0 -0.5rem;
   padding: 0.1rem 0.5rem;
   font: 800 2.5rem/1.15 var(--font-mono);
   letter-spacing: 0.02em;
@@ -339,6 +352,11 @@ button:disabled,
   overflow-wrap: anywhere;
 }
 .readout dd[data-value="unknown"] { color: var(--legend); }
+.readout .medium {
+  margin-top: var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--legend);
+}
 
 /* Failed readouts carry their state's pattern too, not only the wire. */
 #status-link[data-value="down"] {
@@ -354,7 +372,6 @@ button:disabled,
 
 /* The LED lamp: filled with a halo when on, hollow when off, dashed when
    unknown. Driven by data-value, which holds CONFIRMED state only. */
-.readout-led { margin-top: var(--space-3); }
 #status-output { display: inline-flex; align-items: center; gap: 0.85rem; }
 #status-output::before {
   content: "";
@@ -372,7 +389,9 @@ button:disabled,
 
 /* HOLD: when a status poll fails, the readouts keep the last known values
    (like a meter's HOLD). The health message says so in words. */
-#view-control:has(#control-state[data-state="denied"]) .readout dd::after {
+#view-control:has(#control-state[data-state="denied"]) #status-link::after,
+#view-control:has(#control-state[data-state="denied"]) #status-target::after,
+#view-control:has(#control-state[data-state="denied"]) #status-output::after {
   content: "HOLD";
   margin-left: 0.5rem;
   padding: 0.1rem 0.35rem;
@@ -383,12 +402,16 @@ button:disabled,
   vertical-align: middle;
 }
 
+/* The keys and the command result sit in the LED unit, under the output
+   they change. */
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }
+.unit-led .key { flex: 1 1 0; padding: 0.75rem 1rem; font-size: 1rem; white-space: nowrap; }
+.unit-led .state { font-size: 1rem; }
 
 /* ---------------------------------------------------------------------------
    Events view
@@ -484,8 +507,9 @@ button:disabled,
 .state[data-state="target-unreachable"]::before,
 .state[data-state="link-down"]::before { display: block; }
 
-/* The gateway health line is the largest message on the page. */
-.health { font-size: 1.375rem; padding: 1rem 1.25rem; margin-top: var(--space-4); }
+/* The gateway health line is the largest message on the page and sits at
+   the top of the panel, above the readouts it explains. */
+.health { font-size: 1.375rem; padding: 1rem 1.25rem; margin: 0 0 var(--space-4); }
 
 .state[data-state="ok"] {
   --icon: var(--i-ok);
@@ -534,49 +558,52 @@ button:disabled,
 }
 
 /* ---------------------------------------------------------------------------
-   Narrow windows: the signal path turns vertical
+   Narrow windows: the units stack and the path strip runs down the left
    --------------------------------------------------------------------------- */
 @media (max-width: 56rem) {
-  .path { grid-template-columns: 1fr; }
-  .node { flex-direction: row; gap: var(--space-3); text-align: left; }
-  .node-name { max-width: none; }
-  .node-target { flex-wrap: wrap; }
-  .hop {
-    position: relative;
-    align-items: flex-start;
-    min-height: 6.5rem;
-    padding: var(--space-3) 0 var(--space-3) calc(var(--node) + var(--space-3));
+  .path { grid-template-columns: 1fr; grid-template-rows: none; }
+  .unit,
+  .unit + .unit {
+    grid-row: auto;
+    grid-template-rows: none;
+    grid-template-columns: var(--node-sm) minmax(0, 1fr);
+    column-gap: var(--space-3);
+    padding: 0 0 var(--space-4);
+    border-left: 0;
   }
-  .wire {
-    position: absolute;
-    left: calc(var(--node) / 2 - 3px);
-    top: 0;
-    bottom: 0;
+  .unit > :not(.seg) { grid-column: 2; }
+  .seg,
+  .unit + .unit .seg {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+    flex-direction: column;
     height: auto;
-    margin: 0;
-    border-top: 0;
-    border-left: var(--wire);
+    margin: 0 0 calc(-1 * var(--space-4));
   }
-  .hop-link:has(#status-link[data-value="down"]) .wire::before,
-  .hop-target:has(#status-target[data-value="unreachable"]) .wire::before,
-  .hop-link:has(#status-link[data-value="down"]) .wire::after,
-  .hop-target:has(#status-target[data-value="unreachable"]) .wire::after {
-    left: -3px;
+  .wire { width: 0; height: auto; border-top: 0; border-left: var(--wire); }
+  .readout { grid-row: auto; display: block; }
+  .readout dt { margin-top: 0.2rem; }
+  .unit-link:has(#status-link[data-value="down"]) .wire::before,
+  .unit-target:has(#status-target[data-value="unreachable"]) .wire::before,
+  .unit-link:has(#status-link[data-value="down"]) .wire::after,
+  .unit-target:has(#status-target[data-value="unreachable"]) .wire::after {
+    left: -2px;
     top: 50%;
   }
-  .hop-link:has(#status-link[data-value="down"]) .wire::before,
-  .hop-target:has(#status-target[data-value="unreachable"]) .wire::before {
-    width: 1.5rem;
-    height: 3.25rem;
+  .unit-link:has(#status-link[data-value="down"]) .wire::before,
+  .unit-target:has(#status-target[data-value="unreachable"]) .wire::before {
+    width: 1.25rem;
+    height: 2.75rem;
   }
-  .readout { margin: 0; text-align: left; }
-  .readout dt { justify-content: flex-start; }
-  .readout-led { flex-basis: 100%; padding-left: calc(var(--node) + var(--space-3)); margin-top: var(--space-2); }
+}
+
+/* When the header wraps, keep the view switch and toggle left-aligned. */
+@media (max-width: 44rem) {
+  .app-nav { margin-left: 0; }
 }
 
 @media (max-width: 30rem) {
   .panel { padding: var(--space-3); }
-  .readout dd { font-size: 1.75rem; }
+  #status-link, #status-target, #status-output { font-size: 1.875rem; }
   .health { font-size: 1.125rem; }
-  .actions .key { flex: 1 1 100%; }
 }

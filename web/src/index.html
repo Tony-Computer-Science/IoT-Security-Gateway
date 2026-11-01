@@ -46,66 +46,52 @@
         </dl>
       </div>
       <div class="panel">
-        <!-- The readouts sit on a diagram of the real hardware path, so a
-             failure appears on the segment that broke: the SPI wire between
-             A and B, or the Wi-Fi hop between B and C. -->
-        <ol class="path" aria-label="Signal path from the gateway to the device">
-          <li class="node">
-            <span class="node-box" aria-hidden="true">A</span>
-            <span class="node-name">Station board</span>
-          </li>
-          <li class="hop hop-link">
-            <span class="wire" aria-hidden="true"></span>
-            <dl class="readout">
-              <dt>
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1"/></svg>
-                Board-to-board link <span class="medium">SPI wire</span>
-              </dt>
-              <dd id="status-link">—</dd>
-            </dl>
-          </li>
-          <li class="node">
-            <span class="node-box" aria-hidden="true">B</span>
-            <span class="node-name">Bridge board</span>
-          </li>
-          <li class="hop hop-target">
-            <span class="wire" aria-hidden="true"></span>
-            <dl class="readout">
-              <dt>
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 9.5a14 14 0 0 1 19 0M5.5 13a9.5 9.5 0 0 1 13 0M8.5 16.5a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg>
-                Target device <span class="medium">Private Wi-Fi</span>
-              </dt>
-              <dd id="status-target">—</dd>
-            </dl>
-          </li>
-          <li class="node node-target">
-            <span class="node-box" aria-hidden="true">C</span>
-            <span class="node-name">IoT device</span>
-            <dl class="readout readout-led">
-              <dt>
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 15V9a4 4 0 0 1 8 0v6zM6 15h12M10 15v6M14 15v4"/></svg>
-                LED output
-              </dt>
-              <dd id="status-output">—</dd>
-            </dl>
-          </li>
-        </ol>
-
         <!-- Gateway health from the status poll (link down, target unreachable, poll errors). -->
         <p id="control-state" class="state health" data-state="" role="status" hidden></p>
 
-        <div class="actions">
-          <button type="button" class="key" data-action="led_on" disabled>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v16"/></svg>
-            Turn on
-          </button>
-          <button type="button" class="key" data-action="led_off" disabled>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/></svg>
-            Turn off
-          </button>
-        </div>
-        <!-- Result of the last command the user sent. -->
-        <p id="command-result" class="state" data-state="" role="status" hidden></p>
+        <!-- One row of three readouts. Each unit is one label, one value, and
+             the medium beneath it. The thin strip on top of each unit is the
+             hardware path (A to B over the SPI wire, B to C over Wi-Fi, C the
+             device); it is context for where a failure happened. -->
+        <ol class="path" aria-label="Signal path from the gateway to the device">
+          <li class="unit unit-link">
+            <span class="seg" aria-hidden="true"><span class="node-box">A</span><span class="wire"></span></span>
+            <dl class="readout">
+              <dt><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1"/></svg> Board-to-board link</dt>
+              <dd id="status-link">—</dd>
+              <dd class="medium">SPI wire, station board A to bridge board B</dd>
+            </dl>
+          </li>
+          <li class="unit unit-target">
+            <span class="seg" aria-hidden="true"><span class="node-box">B</span><span class="wire"></span></span>
+            <dl class="readout">
+              <dt><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 9.5a14 14 0 0 1 19 0M5.5 13a9.5 9.5 0 0 1 13 0M8.5 16.5a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg> Target device</dt>
+              <dd id="status-target">—</dd>
+              <dd class="medium">Private Wi-Fi, bridge board B to IoT device C</dd>
+            </dl>
+          </li>
+          <li class="unit unit-led">
+            <span class="seg" aria-hidden="true"><span class="node-box">C</span></span>
+            <dl class="readout">
+              <dt><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 15V9a4 4 0 0 1 8 0v6zM6 15h12M10 15v6M14 15v4"/></svg> LED output</dt>
+              <dd id="status-output">—</dd>
+              <dd class="medium">On the IoT device C</dd>
+            </dl>
+            <!-- The controls sit with the output they change. -->
+            <div class="actions" role="group" aria-label="LED controls">
+              <button type="button" class="key" data-action="led_on" disabled>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v16"/></svg>
+                Turn on
+              </button>
+              <button type="button" class="key" data-action="led_off" disabled>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/></svg>
+                Turn off
+              </button>
+            </div>
+            <!-- Result of the last command the user sent. -->
+            <p id="command-result" class="state" data-state="" role="status" hidden></p>
+          </li>
+        </ol>
       </div>
       <button type="button" id="logout-btn" class="link-btn">Sign out</button>
     </section>
