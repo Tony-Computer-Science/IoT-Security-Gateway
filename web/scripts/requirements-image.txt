@@ -1,0 +1,5 @@
+# Image tooling only (not a runtime dependency: nothing here ships to the board).
+# Same version esp_littlefs 1.23.1 uses to build images during `idf.py build`
+# (its image-building-requirements.txt), so verify_littlefs.py reads images
+# exactly as that build path writes them.
+littlefs-python==0.15.0
