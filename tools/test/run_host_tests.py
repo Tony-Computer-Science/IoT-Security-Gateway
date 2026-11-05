@@ -13,6 +13,7 @@ PORTABLE_SOURCES = (
     "gateway_status.c",
     "gateway_policy.c",
     "gateway_access.c",
+    "gateway_uart.c",
 )
 
 
@@ -29,6 +30,7 @@ def main():
             *(str(COMPONENT / name) for name in PORTABLE_SOURCES),
             str(ROOT / "tools/test/test_gateway_protocol.c"),
             str(ROOT / "tools/test/test_gateway_access.c"),
+            str(ROOT / "tools/test/test_gateway_uart.c"),
             "-o", str(executable),
         ]
         subprocess.run(command, check=True)

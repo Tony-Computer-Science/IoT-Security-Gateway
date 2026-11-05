@@ -16,12 +16,18 @@ legacy demonstrations; neither participates in this milestone. Production A
 now provides AP/DHCP/NAT. The separate spi-test-host image stands in for A with
 its Wi-Fi radio disabled.
 
+For tests with two signal wires plus common ground, both endpoints can select
+[UART test mode](uart-link.md) instead of SPI. It carries the same Ethernet
+frames, status and sessions with a serial envelope. Routing and subnet rules
+below are unchanged; existing SPI names also refer to this virtual interface
+when UART is selected. The SPI path remains the production PCB default.
+
 ## Addressing and data path
 
 SPI uses static B=192.168.77.1, A=192.168.77.2, mask=255.255.255.252.
 Both images expose these settings in menuconfig and require a usable /30 pair.
 B rejects upstream subnet overlap. A defaults to 192.168.78.1/24, supplies DHCP
-leases .2-.100 and requires a private .1/24 distinct from SPI and upstream.
+leases .100-.199 and requires a private .1/24 distinct from SPI and upstream.
 A NATs its clients onto its SPI address.
 This intentionally uses NAT on each board and requires no upstream static route.
 Only B obtains an upstream address using DHCP. DNS addresses travel in SPI
@@ -29,7 +35,10 @@ STATUS; the test host installs them into its resolver and production A advertise
 them to clients through DHCP. No DHCP runs over SPI. A keeps its AP/DHCP active
 through ordinary upstream outages. On a DNS address change, it restarts DHCP and
 briefly reassociates clients so they obtain current options; before first upstream
-readiness DNS is omitted. No local DNS proxy or public fallback is used.
+readiness DNS offering is disabled, though IDF 6.1 may advertise the AP
+gateway as its DHCP DNS fallback. No local DNS proxy or public fallback is
+used. A missing backup repeats the learned primary in the SDK DNS slots,
+since its public API rejects clearing a slot with 0.0.0.0.
 
 Ethernet frames are copied through bounded eight-packet queues/pools. The
 shared codec handles wire framing independently of ESP-IDF. The shared link
@@ -82,3 +91,9 @@ The [SPI 0.2.0 contract](spi-protocol.md) supersedes the draft command protocol.
 The legacy [REST API](api-contract.md) is unchanged and is not served by B.
 PCB signal routing remains valid, but its A-uplink/B-IoT-AP labels reflect the
 old architecture and must be revised before fabrication.
+
+A fixed UI host address (.10 in the default AP /24) is excluded from the DHCP
+pool. Station supports four simultaneous clients by default; associated
+clients can communicate locally with the UI PC. Both pre-NAT filters reject
+new TCP SYN packets arriving from outside while allowing normal replies.
+See [client addressing and outbound-only routing](client-network.md).

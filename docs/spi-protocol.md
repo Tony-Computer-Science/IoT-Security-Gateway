@@ -5,7 +5,10 @@ A is controller; B is the Wi-Fi uplink/peripheral.
 
 ## Physical interface
 
-Both ends use SPI2: SCLK 12, MOSI 11, MISO 13, CS 10, HS 4, common ground.
+Both ends use SPI2. ESP32-S3 / Rev A defaults: SCLK 12, MOSI 11, MISO 13,
+CS 10, HS 4, common ground. ESP32-C6 development boards use the separate
+[C6 pinout](../hardware/docs/README.md#esp32-c6-development-board-wiring);
+framing and handshake semantics are identical.
 Mode 0, MSB first, 4 MHz initially; 10 MHz maximum after hardware validation.
 Retain the PCB termination and CS pull-up/HS pull-down. HS now means **DMA
 transaction ready**, not payload available. B raises HS in post_setup_cb and

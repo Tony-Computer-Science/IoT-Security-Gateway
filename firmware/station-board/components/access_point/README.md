@@ -13,3 +13,8 @@ and last DHCP options available. No payload or credential logging is used.
 
 Configuration is under **Station board WPA2 access point** in menuconfig.
 See [board setup](../../README.md) for defaults, DNS behavior and limitations.
+
+DHCP defaults to .100–.199; a manually configured UI PC uses .10 outside that
+pool. Four associated clients are allowed by default. Configuration rejects
+invalid/overlapping address plans before starting Wi-Fi. See
+[Windows client setup](../../../../docs/client-network.md).

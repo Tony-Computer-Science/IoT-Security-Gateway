@@ -33,6 +33,18 @@ bool gw_access_config_valid(const gw_access_network_t *network)
            !gw_subnets_overlap(ip, GW_AP_MASK, network->spi_ip, network->spi_mask);
 }
 
+bool gw_access_address_plan_valid(unsigned first, unsigned last, unsigned ui_host,
+                                  unsigned max_clients)
+{
+    if (first < 2 || last > 254 || first >= last || ui_host < 2 || ui_host > 254 ||
+        max_clients < 1 || max_clients > 10)
+    {
+        return false;
+    }
+    unsigned count = last - first + 1;
+    return count <= 100 && count >= max_clients && (ui_host < first || ui_host > last);
+}
+
 gw_access_state_t gw_access_bridge_state(const gw_status_t *bridge,
                                          const gw_access_network_t *network)
 {
@@ -94,7 +106,8 @@ bool gw_access_ip4_allowed(const uint8_t *packet, size_t contiguous_length, size
     {
         /* Replies enter via A's SPI address before NAT restores the client.
          * A direct SPI/upstream route to the client subnet cannot bypass NAT. */
-        return forwarding_ready && destination == network->spi_ip;
+        bool new_tcp = packet[9] == 6 && (transport[13] & 0x12) == 0x02;
+        return forwarding_ready && destination == network->spi_ip && !new_tcp;
     }
 
     bool local_or_broadcast = destination == network->ap_ip || destination == UINT32_MAX ||

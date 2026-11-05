@@ -71,7 +71,13 @@ static void on_wifi_event(void *argument, esp_event_base_t base, int32_t event_i
     }
     else if (event_id == WIFI_EVENT_AP_STACONNECTED || event_id == WIFI_EVENT_AP_STADISCONNECTED)
     {
-        ESP_LOGI(TAG, "Client %s", event_id == WIFI_EVENT_AP_STACONNECTED ? "associated" : "left");
+        wifi_sta_list_t clients = {0};
+        if (esp_wifi_ap_get_sta_list(&clients) == ESP_OK)
+        {
+            ESP_LOGI(TAG, "Client %s; connected=%d/%d",
+                     event_id == WIFI_EVENT_AP_STACONNECTED ? "associated" : "left", clients.num,
+                     CONFIG_GW_AP_MAX_CLIENTS);
+        }
     }
 }
 
@@ -90,10 +96,13 @@ esp_err_t access_point_set_dns(const uint32_t servers[2])
     {
         return error;
     }
-    for (unsigned i = 0; i < 2 && error == ESP_OK; ++i)
+    for (unsigned i = 0; i < 2 && servers[0] && error == ESP_OK; ++i)
     {
         esp_netif_dns_info_t dns = {.ip.type = ESP_IPADDR_TYPE_V4};
-        dns.ip.u_addr.ip4.addr = servers[i];
+        /* IDF 6.1 rejects 0.0.0.0, including attempts to clear the backup
+         * slot. Repeat the learned primary when no backup is supplied so
+         * an absent/removed backup cannot block NAT or retain a stale DNS. */
+        dns.ip.u_addr.ip4.addr = servers[i] ? servers[i] : servers[0];
         error =
             esp_netif_set_dns_info(ap_netif, i ? ESP_NETIF_DNS_BACKUP : ESP_NETIF_DNS_MAIN, &dns);
     }
@@ -133,9 +142,12 @@ esp_err_t access_point_start(void)
                                     .spi_peer = ntohl(gateway_link_peer_ip()),
                                     .spi_mask = ntohl(spi.netmask.addr)};
     if (!strlen(ssid) || strlen(ssid) > 32 || strlen(password) < 8 || strlen(password) > 63 ||
-        !gw_access_config_valid(&network))
+        !gw_access_config_valid(&network) ||
+        !gw_access_address_plan_valid(CONFIG_GW_AP_DHCP_FIRST_HOST, CONFIG_GW_AP_DHCP_LAST_HOST,
+                                      CONFIG_GW_AP_UI_HOST, CONFIG_GW_AP_MAX_CLIENTS))
     {
-        ESP_LOGE(TAG, "Configure SSID, 8-63 byte passphrase and a private .1/24 distinct from SPI");
+        ESP_LOGE(TAG,
+                 "Check AP credentials, private .1/24 and DHCP range excluding the UI address");
         return ESP_ERR_INVALID_ARG;
     }
     if (ap_netif)
@@ -151,9 +163,10 @@ esp_err_t access_point_start(void)
     ESP_ERROR_CHECK(stop_dhcp());
     esp_netif_ip_info_t ip = {.ip = ap_ip, .gw = ap_ip, .netmask.addr = htonl(GW_AP_MASK)};
     ESP_ERROR_CHECK(esp_netif_set_ip_info(ap_netif, &ip));
-    dhcps_lease_t pool = {.enable = true,
-                          .start_ip.addr = htonl((network.ap_ip & GW_AP_MASK) | 2),
-                          .end_ip.addr = htonl((network.ap_ip & GW_AP_MASK) | 100)};
+    dhcps_lease_t pool = {
+        .enable = true,
+        .start_ip.addr = htonl((network.ap_ip & GW_AP_MASK) | CONFIG_GW_AP_DHCP_FIRST_HOST),
+        .end_ip.addr = htonl((network.ap_ip & GW_AP_MASK) | CONFIG_GW_AP_DHCP_LAST_HOST)};
     ESP_ERROR_CHECK(esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET,
                                            ESP_NETIF_REQUESTED_IP_ADDRESS, &pool, sizeof(pool)));
     uint32_t minutes = CONFIG_GW_AP_LEASE_MINUTES;
@@ -179,7 +192,10 @@ esp_err_t access_point_start(void)
     config.ap.pmf_cfg.required = false;
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &config));
     ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_LOGI(TAG, "Gateway " IPSTR "/24, DHCP .2-.100, channel=%d, clients=%d", IP2STR(&ap_ip),
-             CONFIG_GW_AP_CHANNEL, CONFIG_GW_AP_MAX_CLIENTS);
+    esp_ip4_addr_t ui_ip = {.addr = htonl((network.ap_ip & GW_AP_MASK) | CONFIG_GW_AP_UI_HOST)};
+    ESP_LOGI(TAG, "Gateway " IPSTR "/24, DHCP .%d-.%d, channel=%d, clients=%d", IP2STR(&ap_ip),
+             CONFIG_GW_AP_DHCP_FIRST_HOST, CONFIG_GW_AP_DHCP_LAST_HOST, CONFIG_GW_AP_CHANNEL,
+             CONFIG_GW_AP_MAX_CLIENTS);
+    ESP_LOGI(TAG, "UI computer: configure static " IPSTR " outside DHCP", IP2STR(&ui_ip));
     return ESP_OK;
 }

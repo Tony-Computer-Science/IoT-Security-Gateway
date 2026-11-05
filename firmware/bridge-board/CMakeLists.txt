@@ -1,10 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
-set(IDF_TARGET "esp32s3" CACHE STRING "Gateway target")
 set(EXTRA_COMPONENT_DIRS "../common")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(bridge_board)
-if(NOT IDF_TARGET STREQUAL "esp32s3")
-    message(FATAL_ERROR "This board pinout requires ESP32-S3")
+if(NOT IDF_TARGET STREQUAL "esp32s3" AND NOT IDF_TARGET STREQUAL "esp32c6")
+    message(FATAL_ERROR "Gateway firmware supports ESP32-S3 and ESP32-C6")
 endif()
 # Reject direct upstream routes into the SPI subnet, including when NAT is off.
 idf_component_get_property(lwip_lib lwip COMPONENT_LIB)

@@ -1,9 +1,9 @@
 #pragma once
 
-/** One SPI/Ethernet endpoint per application.
+/** One board-link/Ethernet endpoint per application (SPI or UART).
  * Shared state access is synchronized. Call from tasks, never from an ISR.
  * Only one supervisor may change the netif lifecycle; the transport task owns
- * SPI transactions and session rotation. No caller owns returned netif storage.
+ * transactions and session rotation. No caller owns returned netif storage.
  */
 #include "esp_err.h"
 #include "esp_netif.h"

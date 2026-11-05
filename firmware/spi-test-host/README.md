@@ -13,7 +13,7 @@ idf.py build
 idf.py -p /dev/ttyACM1 flash monitor
 ```
 
-Choose the actual A port. Keep **Gateway SPI link → Build controller endpoint**
+Choose the actual A port. Keep **Gateway board link → Build Board A endpoint**
 enabled, the clock at 4 MHz and the address settings identical to B. Wiring:
 SCLK 12, MOSI 11, MISO 13, CS 10, HS 4 on both ends, plus common ground.
 

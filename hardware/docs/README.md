@@ -9,7 +9,62 @@ Carter Cattadoris. Any member may work here; the current owner reviews.
 Changes to the pinout should also be reviewed by whoever owns the affected
 firmware component.
 
-## Pinout
+## Two-wire UART test link
+
+Enable **Gateway board link → Use two-wire UART instead of SPI** on both
+station and bridge, rebuild and flash both. With common GND already connected,
+only two signal jumpers are required:
+
+| Station (A) | Bridge (B) |
+|---|---|
+| GPIO6 (TX) | GPIO7 (RX) |
+| GPIO7 (RX) | GPIO6 (TX) |
+| GND | GND (existing connection) |
+
+These are GPIO numbers, not header positions. UART1 uses 921600 baud, 8-N-1
+and no RTS/CTS. USB remains available for power, flashing and logs. Remove old
+SPI signal wiring when using this mode; GPIO6/7 are reused by C6 SPI. Use short
+jumpers. No CS, clock or handshake signal is used in UART mode. See the
+[UART test guide](../../docs/uart-link.md). SPI remains the default for Rev A.
+
+## C6 board identity LEDs
+
+ESP32-C6-WROOM-1 DevKitC-1 uses an addressable RGB LED on GPIO8. Production
+station firmware sets it blue and bridge sets it red at startup. These are
+identity colors, not forwarding status. The GPIO is configurable under
+**Board identity LED**; disable the option on hardware without this LED.
+S3/Rev A defaults leave this option disabled. GPIO8 is not part of the
+board-to-board link. See the
+[Espressif DevKitC-1 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/user_guide.html).
+
+## ESP32-C6 development-board wiring
+
+The Rev A PCB pinout below is for ESP32-S3. ESP32-C6 development boards need
+separate wiring; they are not pin-compatible replacements on that PCB.
+Station and bridge select these defaults when targeting `esp32c6`:
+
+| Signal | Board A GPIO | Board B GPIO | Direction |
+|---|---|---|---|
+| SCLK | 6 | 6 | A → B |
+| MOSI | 7 | 7 | A → B |
+| MISO | 2 | 2 | B → A |
+| CS | 18 | 18 | A → B |
+| Handshake (HS) | 19 | 19 | B → A |
+| GND | GND | GND | Common ground |
+
+These pins are exposed on Espressif C6 DevKitC-1 and DevKitM-1 boards; verify
+headers on other models. GPIO12/13 are C6 USB D−/D+ and must remain free for
+native USB flashing/monitoring. C6 strapping pins are GPIO4, 5, 8, 9 and 15;
+this link avoids them and the UART0 pins. See Espressif's
+[C6 GPIO documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c6/api-reference/peripherals/gpio.html)
+and [DevKitM-1 pinout](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitm-1/user_guide.html).
+
+Pin choices are configurable in **Component config → Gateway board link** on
+each endpoint. Match signals, not header positions. Fit the same 10 kΩ CS
+pull-up at B and HS pull-down at A described below. Startup logs print the
+selected pins. Compilation does not validate board wiring or SPI timing.
+
+## ESP32-S3 / Rev A PCB pinout
 
 Defined by the PCB (KiCad project in [../kicad/](../kicad/), Rev A) and used
 unchanged on the breadboard demo (PCB requirement HW-12): **Board A and Board B

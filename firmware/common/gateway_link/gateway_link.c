@@ -5,9 +5,14 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#ifdef CONFIG_GW_LINK_UART
+#include "driver/uart.h"
+#include "gateway_uart.h"
+#else
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "driver/spi_slave.h"
+#endif
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_mac.h"
@@ -17,7 +22,9 @@
 #include "esp_netif_net_stack.h"
 #include "lwip/inet.h"
 
-#define HS_GPIO 4
+#ifndef CONFIG_GW_LINK_UART
+#define HS_GPIO CONFIG_GW_SPI_HS_GPIO
+#endif
 #define QUEUE_DEPTH 8
 /* Slave trans_len saturates at configured length. A guard word lets us
  * distinguish a valid 1600-byte transfer from ANY oversized transaction. */
@@ -47,13 +54,14 @@ typedef struct
     uint32_t received;
     uint32_t rejected;
     uint32_t dropped;
+    uint32_t tx_ip, tx_arp, rx_ip, rx_arp;
     uint32_t tx_sequence;
     uint8_t *tx_dma;
     uint8_t *rx_dma;
 } link_context_t;
 
 /* state_lock protects session, gate, generation, reset, snapshots and counters.
- * The SPI task owns DMA buffers/sequence; the supervisor owns netif_up.
+ * The transport task owns frame buffers/sequence; the supervisor owns netif_up.
  * RTOS queues synchronize packet ownership independently of this lock. */
 static link_context_t s_link;
 static portMUX_TYPE state_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -229,7 +237,7 @@ static void service_session_timeout(void)
         rotate_local_session();
     }
 }
-/* Snapshot one pairing before queueing DMA. Completion must still belong to
+/* Snapshot one pairing before transmission. Completion must still belong to
  * that pairing before its data may enter the network stack. */
 static uint32_t prepare_tx_frame(uint64_t *local_id, uint64_t *peer_id)
 {
@@ -290,6 +298,17 @@ static uint32_t prepare_tx_frame(uint64_t *local_id, uint64_t *peer_id)
         frame.flags = GW_MORE;
     }
     configASSERT(gw_encode(s_link.tx_dma, &frame));
+    if (frame.type == GW_DATA)
+    {
+        if (frame.payload[13] == 0)
+        {
+            ++s_link.tx_ip;
+        }
+        else
+        {
+            ++s_link.tx_arp;
+        }
+    }
     *local_id = frame.sender;
     *peer_id = frame.peer;
     return generation;
@@ -337,6 +356,14 @@ static bool process_rx_frame(size_t length, uint32_t sent_generation, uint64_t s
     }
     if (frame.type == GW_DATA)
     {
+        if (frame.payload[13] == 0)
+        {
+            ++s_link.rx_ip;
+        }
+        else
+        {
+            ++s_link.rx_arp;
+        }
         packet_t *packet;
         if (!data || xQueueReceive(s_link.free_rx_buffers, &packet, 0) != pdTRUE)
         {
@@ -354,6 +381,99 @@ static bool process_rx_frame(size_t length, uint32_t sent_generation, uint64_t s
     }
     return frame.type == GW_DATA || (frame.flags & GW_MORE);
 }
+#ifdef CONFIG_GW_LINK_UART
+/* UART RX is buffered by interrupts during the blocking TX. A single task
+ * still owns codec buffers and session rotation, just as for SPI. */
+static void uart_transport_task(void *arg)
+{
+    (void)arg;
+    static gw_uart_stream_t stream;
+    static uint8_t encoded[GW_UART_ENCODED_MAX];
+    uint8_t input[256];
+    uint64_t rx_local = 0, rx_peer = 0;
+    uint32_t rx_generation = 0;
+    uint64_t next_control_tx = 0;
+#ifdef CONFIG_GW_LINK_DIAGNOSTICS
+    uint64_t next_diagnostic = 0;
+#endif
+    ESP_LOGI(TAG, "UART ready: TX=%d RX=%d baud=%d; cross TX to peer RX; wire version 2",
+             CONFIG_GW_UART_TX_GPIO, CONFIG_GW_UART_RX_GPIO, CONFIG_GW_UART_BAUD);
+    for (;;)
+    {
+        service_session_timeout();
+        if (now_ms() >= next_control_tx ||
+            (gateway_link_data_enabled() && uxQueueMessagesWaiting(s_link.tx_queue)))
+        {
+            uint64_t local, peer;
+            prepare_tx_frame(&local, &peer);
+            size_t length = gw_uart_encode(encoded, s_link.tx_dma);
+            /* A leading delimiter also terminates a partial frame after reset. */
+            const uint8_t delimiter = 0;
+            if (uart_write_bytes(UART_NUM_1, &delimiter, 1) != 1 ||
+                uart_write_bytes(UART_NUM_1, encoded, length) != (int)length ||
+                uart_wait_tx_done(UART_NUM_1, pdMS_TO_TICKS(500)) != ESP_OK)
+            {
+                gateway_link_request_reset();
+            }
+            /* Poll RX continuously, but avoid CRC/serial work for idle frames
+             * more often than needed. Queued data bypasses this idle limit. */
+            next_control_tx = now_ms() + 50;
+        }
+        /* Bound each drain so noisy input cannot starve TX/maintenance. */
+        size_t budget = 8192;
+        while (budget)
+        {
+            size_t want = budget < sizeof(input) ? budget : sizeof(input);
+            int count = uart_read_bytes(UART_NUM_1, input, want, 0);
+            if (count <= 0)
+            {
+                break;
+            }
+            budget -= count;
+            for (int i = 0; i < count; ++i)
+            {
+                if (input[i] && !stream.length && !stream.discard)
+                {
+                    portENTER_CRITICAL(&state_lock);
+                    rx_local = s_link.session.local;
+                    rx_peer = s_link.session.peer;
+                    rx_generation = s_link.generation;
+                    portEXIT_CRITICAL(&state_lock);
+                }
+                gw_uart_result_t result = gw_uart_feed(&stream, input[i], s_link.rx_dma);
+                if (result == GW_UART_FRAME)
+                {
+                    process_rx_frame(GW_FRAME_SIZE, rx_generation, rx_local, rx_peer);
+                }
+                else if (result == GW_UART_INVALID)
+                {
+                    portENTER_CRITICAL(&state_lock);
+                    ++s_link.rejected;
+                    portEXIT_CRITICAL(&state_lock);
+                }
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+#ifdef CONFIG_GW_LINK_DIAGNOSTICS
+        if (now_ms() >= next_diagnostic)
+        {
+            portENTER_CRITICAL(&state_lock);
+            uint32_t rejected = s_link.rejected, dropped = s_link.dropped;
+            portEXIT_CRITICAL(&state_lock);
+            ESP_LOGI(TAG,
+                     "UART packets: tx_ip=%lu rx_ip=%lu tx_arp=%lu rx_arp=%lu rejected=%lu "
+                     "dropped=%lu queued=%u forwarding=%s",
+                     (unsigned long)s_link.tx_ip, (unsigned long)s_link.rx_ip,
+                     (unsigned long)s_link.tx_arp, (unsigned long)s_link.rx_arp,
+                     (unsigned long)rejected, (unsigned long)dropped,
+                     (unsigned)uxQueueMessagesWaiting(s_link.tx_queue),
+                     gateway_link_data_enabled() ? "open" : "closed");
+            next_diagnostic = now_ms() + 5000;
+        }
+#endif
+    }
+}
+#else
 #ifndef CONFIG_GW_SPI_CONTROLLER
 static void IRAM_ATTR on_spi_ready(spi_slave_transaction_t *t)
 {
@@ -370,9 +490,9 @@ static void IRAM_ATTR on_spi_complete(spi_slave_transaction_t *t)
 static void spi_transport_task(void *arg)
 {
     (void)arg;
-    spi_bus_config_t bus = {.mosi_io_num = 11,
-                            .miso_io_num = 13,
-                            .sclk_io_num = 12,
+    spi_bus_config_t bus = {.mosi_io_num = CONFIG_GW_SPI_MOSI_GPIO,
+                            .miso_io_num = CONFIG_GW_SPI_MISO_GPIO,
+                            .sclk_io_num = CONFIG_GW_SPI_SCLK_GPIO,
                             .quadwp_io_num = -1,
                             .quadhd_io_num = -1,
                             .max_transfer_sz = DMA_SIZE};
@@ -382,23 +502,27 @@ static void spi_transport_task(void *arg)
     hs.pull_down_en = GPIO_PULLDOWN_ENABLE;
     ESP_ERROR_CHECK(gpio_config(&hs));
     ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &bus, SPI_DMA_CH_AUTO));
-    spi_device_interface_config_t config = {
-        .mode = 0, .clock_speed_hz = CONFIG_GW_SPI_CLOCK_HZ, .spics_io_num = 10, .queue_size = 1};
+    spi_device_interface_config_t config = {.mode = 0,
+                                            .clock_speed_hz = CONFIG_GW_SPI_CLOCK_HZ,
+                                            .spics_io_num = CONFIG_GW_SPI_CS_GPIO,
+                                            .queue_size = 1};
     spi_device_handle_t device;
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &config, &device));
 #else
     hs.mode = GPIO_MODE_OUTPUT;
     ESP_ERROR_CHECK(gpio_config(&hs));
     gpio_set_level(HS_GPIO, 0);
-    ESP_ERROR_CHECK(gpio_set_pull_mode(10, GPIO_PULLUP_ONLY));
+    ESP_ERROR_CHECK(gpio_set_pull_mode(CONFIG_GW_SPI_CS_GPIO, GPIO_PULLUP_ONLY));
     spi_slave_interface_config_t config = {.mode = 0,
-                                           .spics_io_num = 10,
+                                           .spics_io_num = CONFIG_GW_SPI_CS_GPIO,
                                            .queue_size = 1,
                                            .post_setup_cb = on_spi_ready,
                                            .post_trans_cb = on_spi_complete};
     ESP_ERROR_CHECK(spi_slave_initialize(SPI2_HOST, &bus, &config, SPI_DMA_CH_AUTO));
 #endif
-    ESP_LOGI(TAG, "SPI ready: SCLK=12 MOSI=11 MISO=13 CS=10 HS=4; protocol 0.2.0");
+    ESP_LOGI(TAG, "SPI ready: SCLK=%d MOSI=%d MISO=%d CS=%d HS=%d; protocol 0.2.0",
+             CONFIG_GW_SPI_SCLK_GPIO, CONFIG_GW_SPI_MOSI_GPIO, CONFIG_GW_SPI_MISO_GPIO,
+             CONFIG_GW_SPI_CS_GPIO, HS_GPIO);
     for (;;)
     {
         service_session_timeout();
@@ -448,6 +572,7 @@ static void spi_transport_task(void *arg)
 #endif
     }
 }
+#endif
 esp_err_t gateway_link_init(void)
 {
     if (s_link.netif)
@@ -465,6 +590,26 @@ esp_err_t gateway_link_init(void)
     {
         return ESP_ERR_INVALID_ARG;
     }
+#ifdef CONFIG_GW_LINK_UART
+    /* Keep board traffic off the UART0/USB logging and flashing console. */
+#if defined(CONFIG_ESP_CONSOLE_UART_NUM) && CONFIG_ESP_CONSOLE_UART_NUM == 1
+#error "Gateway UART link requires UART1; choose another console port"
+#endif
+    if (CONFIG_GW_UART_TX_GPIO == CONFIG_GW_UART_RX_GPIO)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_1, 8192, 0, 0, NULL, 0));
+    uart_config_t uart = {.baud_rate = CONFIG_GW_UART_BAUD,
+                          .data_bits = UART_DATA_8_BITS,
+                          .parity = UART_PARITY_DISABLE,
+                          .stop_bits = UART_STOP_BITS_1,
+                          .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+                          .source_clk = UART_SCLK_DEFAULT};
+    ESP_ERROR_CHECK(uart_param_config(UART_NUM_1, &uart));
+    ESP_ERROR_CHECK(uart_set_pin(UART_NUM_1, CONFIG_GW_UART_TX_GPIO, CONFIG_GW_UART_RX_GPIO,
+                                 UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+#endif
 #ifdef CONFIG_GW_SPI_CONTROLLER
     s_link.ip = (esp_netif_ip_info_t){.ip = a, .netmask = mask, .gw = b};
     s_link.peer_ip = b.addr;
@@ -490,7 +635,11 @@ esp_err_t gateway_link_init(void)
     base.get_ip_event = 0;
     base.lost_ip_event = 0;
     base.if_key = "SPI_LINK";
+#ifdef CONFIG_GW_LINK_UART
+    base.if_desc = "uart";
+#else
     base.if_desc = "spi";
+#endif
     base.route_prio = 10;
     base.ip_info = &s_link.ip;
     ESP_ERROR_CHECK(esp_read_mac(base.mac, ESP_MAC_WIFI_STA));
@@ -506,7 +655,12 @@ esp_err_t gateway_link_init(void)
     ESP_ERROR_CHECK(esp_netif_attach(s_link.netif, &s_link));
     esp_netif_action_start(s_link.netif, NULL, 0, NULL);
     rotate_local_session();
-    if (xTaskCreate(spi_transport_task, "spi_link", 6144, NULL, 8, NULL) != pdPASS)
+#ifdef CONFIG_GW_LINK_UART
+    TaskFunction_t transport_task = uart_transport_task;
+#else
+    TaskFunction_t transport_task = spi_transport_task;
+#endif
+    if (xTaskCreate(transport_task, "board_link", 6144, NULL, 8, NULL) != pdPASS)
     {
         return ESP_ERR_NO_MEM;
     }

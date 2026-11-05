@@ -167,6 +167,14 @@ static void status_and_policy(void)
     assert(!ALLOWED(false, true, true)); /* upstream direct-route bypass */
     ip[18] = 1;
     assert(ALLOWED(false, true, true)); /* upstream address before NAT */
+    ip[33] = 0x02;
+    assert(!ALLOWED(false, true, true)); /* No upstream-initiated TCP SYN. */
+    assert(ALLOWED(true, false, true));  /* Clients may initiate outbound TCP. */
+    ip[33] = 0x12;
+    assert(ALLOWED(false, true, true)); /* Outbound connections need SYN+ACK replies. */
+    ip[33] = 0x10;
+    assert(ALLOWED(false, true, true)); /* Established return traffic. */
+    ip[33] = 0;
     for (size_t n = 0; n < 40; ++n)
     {
         assert(!packet_allowed(ip, n, true, false, true));
@@ -252,10 +260,12 @@ static void recovery_simulation(void)
 int main(void)
 {
     void test_gateway_access(void);
+    void test_gateway_uart(void);
     framing();
     sessions();
     status_and_policy();
     recovery_simulation();
     test_gateway_access();
+    test_gateway_uart();
     return 0;
 }

@@ -115,6 +115,13 @@ bool gw_ip4_allowed(const uint8_t *packet, size_t contiguous_length, size_t tota
     }
     if (policy->ingress == GW_INGRESS_UPLINK)
     {
+        /* Outside hosts cannot initiate TCP connections, even if their
+         * chosen tuple happens to coincide with an existing NAT mapping. */
+        size_t header_length = (packet[0] & 15) * 4;
+        if (packet[9] == IP_PROTOCOL_TCP && (packet[header_length + 13] & 0x12) == 0x02)
+        {
+            return false;
+        }
         /* A manually installed upstream route must not bypass NAT. */
         uint32_t destination_network = read_u32_be(packet + 16) & policy->link_mask;
         if (destination_network == (policy->link_ipv4 & policy->link_mask))

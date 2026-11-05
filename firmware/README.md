@@ -8,9 +8,13 @@
 | target-device | Legacy intentionally insecure LED target C | Unchanged scaffold; not part of routing |
 | common | Shared portable protocol and ESP-NETIF/SPI driver | Used by B and test host |
 
-Station, bridge and test-host use ESP-IDF **6.1** and ESP32-S3. The older target
+Station and bridge use ESP-IDF **6.1** and support ESP32-S3 (Rev A PCB/default)
+or ESP32-C6 (development boards with the separate
+[C6 pinout](../hardware/docs/README.md#esp32-c6-development-board-wiring)).
+The test-host image still targets ESP32-S3. The older target
 scaffold was documented for IDF 5.x and has not been migrated or validated in
-this milestone. See each project's README for commands. SSIDs and
+this milestone. See each project's README for commands. Station and bridge can also use a
+[two-wire UART test link](../docs/uart-link.md) instead of SPI. SSIDs and
 passwords belong in git-ignored sdkconfig, never tracked defaults. Generated
 binaries also contain configured credentials and must not be published.
 

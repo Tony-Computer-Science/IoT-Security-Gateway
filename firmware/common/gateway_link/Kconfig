@@ -1,6 +1,33 @@
-menu "Gateway SPI link"
+menu "Gateway board link"
+config GW_LINK_UART
+    bool "Use two-wire UART instead of SPI"
+    default n
+    help
+        Enable on both boards for a slower UART test link with TX, RX and
+        common ground. SPI remains the default for the Rev A PCB.
+config GW_LINK_DIAGNOSTICS
+    bool "Log packet counters and run a one-time HTTP connectivity check"
+    default n
+    help
+        Troubleshooting only. Counts packets without logging their contents.
+        Requests http://example.com once after forwarding becomes ready.
+config GW_UART_TX_GPIO
+    int "UART TX GPIO"
+    depends on GW_LINK_UART
+    range 0 48
+    default 6
+config GW_UART_RX_GPIO
+    int "UART RX GPIO"
+    depends on GW_LINK_UART
+    range 0 48
+    default 7
+config GW_UART_BAUD
+    int "UART link baud rate"
+    depends on GW_LINK_UART
+    range 115200 1000000
+    default 921600
 config GW_SPI_CONTROLLER
-    bool "Build controller endpoint (Board A test application)"
+    bool "Build Board A endpoint (SPI controller / UART host)"
     default n
 config GW_BRIDGE_IP
     string "Board B SPI IPv4 address"
@@ -15,4 +42,33 @@ config GW_SPI_CLOCK_HZ
     int "Controller SPI clock (Hz)"
     range 100000 10000000
     default 4000000
+config GW_SPI_SCLK_GPIO
+    int "SPI clock GPIO"
+    range 0 48
+    default 6 if IDF_TARGET_ESP32C6
+    default 12
+config GW_SPI_MOSI_GPIO
+    int "SPI MOSI GPIO"
+    range 0 48
+    default 7 if IDF_TARGET_ESP32C6
+    default 11
+config GW_SPI_MISO_GPIO
+    int "SPI MISO GPIO"
+    range 0 48
+    default 2 if IDF_TARGET_ESP32C6
+    default 13
+config GW_SPI_CS_GPIO
+    int "SPI chip-select GPIO"
+    range 0 48
+    default 18 if IDF_TARGET_ESP32C6
+    default 10
+config GW_SPI_HS_GPIO
+    int "SPI handshake GPIO"
+    range 0 48
+    default 19 if IDF_TARGET_ESP32C6
+    default 4
+    help
+        Match the wiring at both endpoints. ESP32-C6 defaults avoid its USB
+        pins (GPIO12/13), flash pins and strapping pins. The S3 defaults match
+        the Rev A PCB. See hardware/docs/README.md for both pinouts.
 endmenu

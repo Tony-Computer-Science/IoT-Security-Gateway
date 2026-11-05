@@ -30,6 +30,22 @@ static gw_status_t ready_bridge(void)
 
 static void address_and_readiness(void)
 {
+    assert(gw_access_address_plan_valid(100, 199, 10, 4));
+    assert(gw_access_address_plan_valid(100, 199, 10, 10));
+    assert(gw_access_address_plan_valid(253, 254, 10, 2));
+    assert(!gw_access_address_plan_valid(100, 199, 100, 4));
+    assert(!gw_access_address_plan_valid(100, 199, 150, 4));
+    assert(!gw_access_address_plan_valid(100, 199, 199, 4));
+    assert(!gw_access_address_plan_valid(100, 199, 1, 4));
+    assert(!gw_access_address_plan_valid(100, 199, 255, 4));
+    assert(!gw_access_address_plan_valid(1, 100, 200, 4));
+    assert(!gw_access_address_plan_valid(100, 255, 10, 4));
+    assert(!gw_access_address_plan_valid(2, 102, 200, 4));
+    assert(!gw_access_address_plan_valid(100, 100, 10, 1));
+    assert(!gw_access_address_plan_valid(199, 100, 10, 4));
+    assert(!gw_access_address_plan_valid(100, 102, 10, 4));
+    assert(!gw_access_address_plan_valid(100, 199, 10, 0));
+    assert(!gw_access_address_plan_valid(100, 199, 10, 11));
     assert(gw_access_config_valid(&network));
     gw_access_network_t invalid = network;
     invalid.ap_ip = network.spi_peer;
@@ -94,6 +110,15 @@ static void packet_policy(void)
     gw_access_ip4_allowed(packet, sizeof(packet), sizeof(packet), &network, clients, ready)
     assert(ALLOWED(true, true));
     assert(!ALLOWED(true, false));
+    const unsigned client_hosts[] = {10, 100, 101, 199};
+    packet[33] = 0x02;
+    for (unsigned i = 0; i < sizeof(client_hosts) / sizeof(client_hosts[0]); ++i)
+    {
+        write_ip(packet + 12, (network.ap_ip & GW_AP_MASK) | client_hosts[i]);
+        assert(ALLOWED(true, true)); /* Static UI and multiple DHCP clients can connect out. */
+        assert(!ALLOWED(true, false));
+    }
+    packet[33] = 0;
     write_ip(packet + 12, network.spi_ip);
     assert(!ALLOWED(true, true)); /* Spoofed client source. */
     write_ip(packet + 12, network.ap_ip);
@@ -107,6 +132,13 @@ static void packet_policy(void)
     write_ip(packet + 12, 0x08080808);
     write_ip(packet + 16, network.spi_ip);
     assert(ALLOWED(false, true)); /* Pre-NAT return destination. */
+    packet[33] = 0x02;
+    assert(!ALLOWED(false, true)); /* Outside cannot open a TCP connection. */
+    packet[33] = 0x12;
+    assert(ALLOWED(false, true)); /* SYN+ACK replies to client connections work. */
+    packet[33] = 0x10;
+    assert(ALLOWED(false, true)); /* Established reply traffic remains usable. */
+    packet[33] = 0;
     assert(!ALLOWED(false, false));
     write_ip(packet + 16, network.ap_ip + 1);
     assert(!ALLOWED(false, true)); /* Direct route bypass from B. */

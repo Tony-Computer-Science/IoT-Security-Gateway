@@ -10,8 +10,25 @@ config GW_AP_IP
     default "192.168.78.1"
     help
         Must not overlap the SPI link or Board B's upstream network.
-        DHCP uses .2 through .100 in this /24. Both boards keep their SPI
-        addresses configured under Gateway SPI link.
+        DHCP defaults to .100 through .199 in this /24. The UI computer's
+        static address defaults to .10, outside that automatic pool.
+        Both boards keep their link addresses under Gateway board link.
+config GW_AP_DHCP_FIRST_HOST
+    int "First automatic DHCP address (last octet)"
+    range 2 253
+    default 100
+config GW_AP_DHCP_LAST_HOST
+    int "Last automatic DHCP address (last octet)"
+    range 3 254
+    default 199
+config GW_AP_UI_HOST
+    int "UI computer static address (last octet, excluded from DHCP)"
+    range 2 254
+    default 10
+    help
+        Configure this static address on the UI computer itself. This option
+        validates that the DHCP pool cannot assign that address to others;
+        it is not a MAC-based DHCP reservation or an access-control identity.
 config GW_AP_CHANNEL
     int "2.4 GHz channel"
     range 1 11

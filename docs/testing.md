@@ -21,6 +21,19 @@ Build `firmware/station-board`, `firmware/bridge-board` and `firmware/spi-test-h
 and `idf.py set-target esp32s3` on initial configuration. Set-target resets
 sdkconfig, so configure credentials afterward. See each project's README.
 
+## Recorded C6 UART validation — 2026-11-05
+
+Both C6 gateway images were flashed and their writes verified. Hardware checks
+confirmed AP/DHCP, UART sessions, upstream association, DNS/HTTP from both
+boards, phone internet access, blue/red identity LEDs and peer-restart recovery.
+Final UART uses compact envelope 0.2.0 at 921600 baud. The fixed UI .10 address
+is excluded from DHCP .100–.199; four Wi-Fi slots are configured. Host tests
+cover address-plan conflicts and outside TCP initiation versus allowed replies.
+
+Simultaneous radio clients, Windows static-IP/UI-firewall setup, a packet-level
+outside inbound attempt and an extended traffic soak remain unverified. See
+[UART details](uart-link.md) and [client setup and boundaries](client-network.md).
+
 ## Recorded software validation — 2026-10-27
 
 | Check | Result |
@@ -39,8 +52,8 @@ sdkconfig, so configure credentials afterward. See each project's README.
 All six firmware configurations built without compiler warnings. Generated
 configuration and binaries remain under ignored paths. The feature builds use
 dummy credentials and a documentation-only echo address; they are compile
-checks, not provisioned deployment images. No board was flashed or physically
-tested. See [maintenance](firmware-maintenance.md) for component ownership and
+checks, not provisioned deployment images. At that validation point, no board
+was flashed or physically tested. See [maintenance](firmware-maintenance.md) for component ownership and
 the development workflow.
 
 Production A was initially checked using separate ignored build/configuration
@@ -106,7 +119,7 @@ the controlled upstream LAN. Record both serial logs and client network settings
 | Empty/short AP passphrase | No AP or client forwarding; configuration error logged without credentials |
 | Wrong client password | Association fails; no DHCP lease issued |
 | Correct password | WPA2/AES association; never open/WEP/TKIP; A never joins another Wi-Fi AP |
-| DHCP while B is offline | Client gets .2-.100/24 and gateway .1; DNS omitted before B has first supplied servers; gateway ping works |
+| DHCP while B is offline | Client gets .100-.199/24 and gateway .1; no usable DNS proxy exists before B supplies DNS (SDK may advertise gateway fallback); gateway ping works |
 | First B readiness | DNS options arrive; clients briefly reassociate and obtain current DNS settings |
 | DHCP renewal/DNS change | Gateway/mask/options remain correct; a DNS-only change on B propagates and triggers reassociation |
 | DNS/HTTPS/TCP/UDP/ICMP | Client resolves names, verifies HTTPS certificates, completes echo tests and pings through both NAT layers |
@@ -130,3 +143,6 @@ clients that cache old options may need a manual Wi-Fi reconnect.
 
 The firmware does not isolate associated clients at layer 2. Do not report
 peer-client isolation or application authorization as a passing test.
+
+For multiple clients, Windows UI static addressing, and outside-initiated
+connection checks, also follow [the client-network procedure](client-network.md).

@@ -5,9 +5,11 @@
 #include "gateway_link.h"
 #include "access_point.h"
 #include "station_router.h"
+#include "board_led.h"
+#include "gateway_diagnostics.h"
 
 #ifndef CONFIG_GW_SPI_CONTROLLER
-#error "Board A requires the SPI controller endpoint"
+#error "Board A requires the host endpoint; enable GW_SPI_CONTROLLER"
 #endif
 #if !CONFIG_LWIP_IP_FORWARD || !CONFIG_LWIP_IPV4_NAPT
 #error "Board A requires IPv4 forwarding and NAPT"
@@ -18,6 +20,11 @@
 
 void app_main(void)
 {
+    esp_err_t led_error = board_led_show_role(true);
+    if (led_error != ESP_OK)
+    {
+        ESP_LOGW("station", "Identity LED unavailable: %s", esp_err_to_name(led_error));
+    }
     /* Stop on NVS failure; never erase stored data silently. */
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
@@ -31,4 +38,5 @@ void app_main(void)
                  esp_err_to_name(error));
     }
     ESP_ERROR_CHECK(station_router_start());
+    gateway_diagnostics_start(true);
 }

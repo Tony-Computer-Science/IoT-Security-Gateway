@@ -2,7 +2,7 @@
 #include "gateway_protocol.h"
 
 /** Board A policy uses host-order IPv4 integers throughout. The AP is a /24
- * with gateway .1 and DHCP leases .2-.100, within an RFC1918 private range. */
+ * with gateway .1, a bounded DHCP pool and a separate static UI address. */
 #define GW_AP_MASK UINT32_C(0xffffff00)
 
 typedef enum
@@ -22,6 +22,10 @@ typedef struct
 } gw_access_network_t;
 
 bool gw_access_config_valid(const gw_access_network_t *network);
+/** Host octets in the AP /24: pool must fit the SDK's 100-address limit,
+ * cover all clients, and exclude the fixed UI address and gateway. */
+bool gw_access_address_plan_valid(unsigned first, unsigned last, unsigned ui_host,
+                                  unsigned max_clients);
 /** Validate B's current status, address agreement and all three subnets. */
 gw_access_state_t gw_access_bridge_state(const gw_status_t *bridge,
                                          const gw_access_network_t *network);
