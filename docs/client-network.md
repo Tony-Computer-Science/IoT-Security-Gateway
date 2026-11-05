@@ -51,15 +51,18 @@ using this adapter on a different network if the Windows version applies the
 manual settings to the adapter rather than just this saved network.
 
 Bind the UI service to **192.168.78.10**, and allow its TCP port through the
-Windows firewall only from **192.168.78.0/24**. For the repository's development
-mock, the command is:
+Windows firewall only from **192.168.78.0/24**. To serve the existing website
+and control the third C6, run from the repository root:
 
 ```powershell
-python web/mock/server.py --host 192.168.78.10 --port 8000
+python web/device_server.py --host 192.168.78.10 --port 8000
 ```
 
-That serves the existing mock UI/API; it does not implement a new IoT-device
-integration. A scoped firewall rule for this example, run in Administrator
+Sign in at `http://192.168.78.10:8000/` with username `operator` and the
+password printed by the service. Board C initiates polls to this address;
+the PC does not initiate connections to the board. See
+[Board C setup](../firmware/target-device/README.md) and the
+[device API](device-api.md). A scoped firewall rule, run in Administrator
 PowerShell, is:
 
 ```powershell

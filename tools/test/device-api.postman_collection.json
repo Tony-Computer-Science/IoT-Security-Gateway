@@ -1,0 +1,356 @@
+{
+  "info": {
+    "name": "Board C PC UI live-channel API",
+    "description": "Run with run_device_api_tests.py. Real local server and a simulated device, not physical firmware evidence. No credentials are saved here.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Reject unauthenticated browser status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/status"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"session required\", () => pm.expect(pm.response.json().error).to.eql(\"invalid_session\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Operator login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\": \"operator\", \"password\": \"{{uiPassword}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"session token issued\", () => pm.expect(pm.response.json().token).to.be.a(\"string\"));",
+              "pm.environment.set(\"accessToken\", pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Device heartbeat is visible",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/status"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"real device channel active\", () => { const b=pm.response.json(); pm.expect(b.target_reachable).to.eql(true); pm.expect(b.link_ok).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Turn real-channel LED on",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/command",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"action\": \"led_on\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"device confirmed on\", () => pm.expect(pm.response.json()).to.eql({result:\"ok\",output:\"on\"}));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reported LED state is on",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/status"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"reported output\", () => pm.expect(pm.response.json().output).to.eql(\"on\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Turn real-channel LED off",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/command",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"action\": \"led_off\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"device confirmed off\", () => pm.expect(pm.response.json()).to.eql({result:\"ok\",output:\"off\"}));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject unknown command",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/command",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"action\": \"reboot\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"allow-list enforced\", () => pm.expect(pm.response.json().error).to.eql(\"invalid_action\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject wrong device method",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/device/poll"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 405\", () => pm.response.to.have.status(405));",
+              "pm.test(\"method checked\", () => pm.expect(pm.response.json().error).to.eql(\"method_not_allowed\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject unexpected device ID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/device/poll",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"device_id\": \"other\", \"boot_id\": \"0000000000000001\", \"output\": \"off\", \"ack_id\": null, \"ack_ok\": true, \"uptime_s\": 0}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"configured device selected\", () => pm.expect(pm.response.json().error).to.eql(\"unknown_device\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read device-confirmed event log",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/events"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"commands recorded\", () => pm.expect(pm.response.json().events.filter(e=>e.type===\"command\").length).to.eql(2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Log out",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/logout"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logged-out session is rejected",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/status"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"session invalidated\", () => pm.expect(pm.response.json().error).to.eql(\"invalid_session\"));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

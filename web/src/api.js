@@ -1,4 +1,4 @@
-// REST client for docs/api-contract.md v0.1.0.
+// REST client for docs/api-contract.md v0.2.0.
 //
 // Rules for this module:
 //   - One exported function per endpoint.
@@ -9,7 +9,7 @@
 //     written to localStorage, sessionStorage, cookies, or the URL (R2).
 //   - Uses relative paths only. No scheme, host, or port.
 
-export const API_VERSION = '0.1.0';
+export const API_VERSION = '0.2.0';
 
 const REQUEST_TIMEOUT_MS = 8000;
 
@@ -30,6 +30,7 @@ export const ErrorCode = Object.freeze({
   PAYLOAD_TOO_LARGE: 'payload_too_large',
   RATE_LIMITED: 'rate_limited',
   TARGET_UNREACHABLE: 'target_unreachable',
+  COMMAND_UNCONFIRMED: 'command_unconfirmed',
   LINK_DOWN: 'link_down',
   NETWORK: 'network_error', // fetch failed: gateway unreachable
   TIMEOUT: 'timeout', // no response within REQUEST_TIMEOUT_MS
@@ -47,6 +48,7 @@ const FALLBACK_BY_STATUS = {
   429: ErrorCode.RATE_LIMITED,
   502: ErrorCode.TARGET_UNREACHABLE,
   503: ErrorCode.LINK_DOWN,
+  504: ErrorCode.COMMAND_UNCONFIRMED,
 };
 
 export class ApiError extends Error {

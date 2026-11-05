@@ -1,0 +1,26 @@
+menu "Board C IoT device"
+config TARGET_WIFI_SSID
+    string "Station AP SSID (private sdkconfig only)"
+    default ""
+config TARGET_WIFI_PASSWORD
+    string "Station AP passphrase (private sdkconfig only)"
+    default ""
+config TARGET_UI_HOST
+    string "UI computer IPv4 address"
+    default "192.168.78.10"
+config TARGET_UI_PORT
+    int "UI computer HTTP port"
+    range 1 65535
+    default 8000
+config TARGET_DEVICE_ID
+    string "Device ID (match PC server --device-id)"
+    default "iot-c6"
+config TARGET_POLL_MS
+    int "Command polling interval (ms)"
+    range 250 2000
+    default 500
+config TARGET_LED_GPIO
+    int "Addressable RGB LED GPIO"
+    range 0 30
+    default 8
+endmenu

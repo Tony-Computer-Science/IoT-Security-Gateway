@@ -11,10 +11,15 @@ Upstream LAN / internet
 ```
 
 Repository names remain station-board=A and bridge-board=B, but their planned
-Wi-Fi roles are now A=AP and B=station. Board C and the web command UI are
-legacy demonstrations; neither participates in this milestone. Production A
-now provides AP/DHCP/NAT. The separate spi-test-host image stands in for A with
-its Wi-Fi radio disabled.
+Wi-Fi roles are now A=AP and B=station. Production A provides AP/DHCP/NAT.
+The separate spi-test-host image stands in for A with its Wi-Fi radio disabled.
+Board C now joins A's AP as a Wi-Fi client and polls the UI PC at
+192.168.78.10:8000. The PC serves the existing browser API and confirms LED
+commands using device acknowledgements. This application traffic stays on
+the AP; it does not pass through the A/B transport or require outside access.
+The intentionally unauthenticated device channel is documented in
+[device-api.md](device-api.md). Browser login authenticates operators to the
+PC service; it does not authenticate C or implement per-client network policy.
 
 For tests with two signal wires plus common ground, both endpoints can select
 [UART test mode](uart-link.md) instead of SPI. It carries the same Ethernet
@@ -82,13 +87,14 @@ not rewritten to make the new router appear compliant.
 | R1 controlled target entry | Topology and traffic direction changed; target-command isolation is not implemented here. |
 | R2 credential before commands | Uplink/AP credentials are protected from source/log disclosure and A requires WPA2 admission; application command authentication is not part of this router. |
 | R3 status/output allow-list, fixed destination | Intentionally incompatible: clients choose ordinary IPv4 destinations. |
-| R4 configurable request limits | Packet queues are bounded; command/login limits remain legacy scope. |
-| R5 bounded authorized event log | Link counters and serial diagnostics exist; an authorized event-log service does not. |
-| R6 normal target output control | Legacy LED operation is not connected to the router. |
+| R4 configurable request limits | Packet queues are bounded; the PC service reuses browser login/command limits and allows one pending target command. These are separate from router policy. |
+| R5 bounded authorized event log | The PC service exposes an authenticated bounded application log. Router link counters and serial diagnostics are separate; the UI events view is unfinished. |
+| R6 normal target output control | C6 LED control and PC command confirmation are implemented and tested locally; third-board hardware acceptance is pending. |
 | R7 restart handling | Session invalidation and closed data paths are implemented, but physical acceptance is pending. |
 
 The [SPI 0.2.0 contract](spi-protocol.md) supersedes the draft command protocol.
-The legacy [REST API](api-contract.md) is unchanged and is not served by B.
+The [REST API 0.2.0](api-contract.md) is served by the PC, not A or B, and
+documents unknown command results when a delivered command lacks confirmation.
 PCB signal routing remains valid, but its A-uplink/B-IoT-AP labels reflect the
 old architecture and must be revised before fabrication.
 

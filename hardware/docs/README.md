@@ -103,7 +103,10 @@ All other GPIOs are unconnected on the PCB.
 
 | Function | GPIO | Notes |
 |---|---|---|
-| LED | TODO | On-board RGB LED, or external LED + resistor? (Board C is not on the PCB) |
+| C6 RGB LED data | GPIO8 (configurable) | Green=on, black=off on the matching C6 development board; Board C is not on the PCB. Confirm carrier-board wiring if using another model. |
+
+Board C uses Wi-Fi to IoT-Gateway and needs no signal wiring to A or B.
+See [Board C setup](../../firmware/target-device/README.md).
 
 ## Wiring
 

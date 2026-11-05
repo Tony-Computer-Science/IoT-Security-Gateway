@@ -307,16 +307,15 @@ function formatSeconds(s) {
 // NO OPTIMISTIC UPDATES (R6, R7). The displayed LED state changes only when a
 // gateway response reports the target's actual state: a 200 from
 // POST /api/command, or GET /api/status. Clicking a button never changes it.
-// If the display flipped on click, a command that then failed (link down,
-// target unreachable, rate limited, timeout) would look like it had worked:
-// the user would see "On" while the real LED is still off. R7 forbids a
-// failure ever appearing as a successful action, and R6 says a rejected
-// request leaves the target unchanged, so the display must stay unchanged too.
+// Admission failures leave the target unchanged. A lost reply or missing
+// device acknowledgement can leave an unknown physical result. Keep the
+// last confirmed output until another report arrives; never infer success
+// or automatically retry from an ambiguous response.
 
 const LINK_DOWN_TEXT =
-  'Board-to-board link is down: the station board cannot talk to the bridge board. Commands are disabled.';
+  'The device connection is unavailable. Commands are disabled.';
 const TARGET_UNREACHABLE_TEXT =
-  'Target device unreachable: the bridge board cannot reach the IoT device. Commands are disabled.';
+  'The IoT device is unavailable. Commands are disabled.';
 const GATEWAY_UNREACHABLE_TEXT =
   'Could not reach the gateway. Check your connection and try again.';
 
@@ -369,8 +368,8 @@ function renderStatus(status) {
   // `shown` unhealthy, so its more specific failure message is kept.
   if (wasHealthy && !isHealthy()) setStateMessage('command-result', '', '');
 
-  // Link down is checked first: if the boards cannot talk, Board A has no way
-  // to know whether the target is reachable.
+  // Channel availability is checked first. In PC mode both flags come from
+  // the device heartbeat; the mock also models a separate A/B link failure.
   if (!shown.link_ok) {
     setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
   } else if (!shown.target_reachable) {
@@ -471,13 +470,17 @@ function handleCommandError(err) {
       shown.target_reachable = false;
       setStateMessage('control-state', 'target-unreachable', TARGET_UNREACHABLE_TEXT);
       setStateMessage('command-result', 'target-unreachable',
-        `Command not delivered: the bridge board could not reach the IoT device. ${unchanged}`);
+        `Command not delivered: the IoT device could not be reached. ${unchanged}`);
       break;
     case api.ErrorCode.LINK_DOWN:
       shown.link_ok = false;
       setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
       setStateMessage('command-result', 'link-down',
-        `Command not delivered: the station board cannot talk to the bridge board. ${unchanged}`);
+        `Command not delivered: the device connection is unavailable. ${unchanged}`);
+      break;
+    case api.ErrorCode.COMMAND_UNCONFIRMED:
+      setStateMessage('command-result', 'denied',
+        'The device did not confirm this command. Its result is unknown; wait for a status update before retrying.');
       break;
     case api.ErrorCode.NETWORK:
     case api.ErrorCode.TIMEOUT:

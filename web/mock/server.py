@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Development mock of Board A's REST API, plus a static server for web/src.
 
-Implements docs/api-contract.md v0.1.0 with real behavior (token issuance and
+Implements docs/api-contract.md v0.2.0 with real behavior (token issuance and
 expiry, failed-login lockout, command rate limit, bounded event log, simulated
 LED) and adds /__mock/* endpoints for failure injection so R6 and R7 can be
 exercised without hardware. See web/mock/README.md.
@@ -27,7 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-API_VERSION = "0.1.0"
+API_VERSION = "0.2.0"
 
 HERE = Path(__file__).resolve().parent
 SRC_DIR = (HERE.parent / "src").resolve()
@@ -206,7 +206,7 @@ class MockGateway:
             if not isinstance(body, dict):
                 raise ApiError(400, "invalid_request")
             action = body.get("action")
-            if action not in ACTIONS or set(body) != {"action"}:
+            if not isinstance(action, str) or action not in ACTIONS or set(body) != {"action"}:
                 self._log("command", "denied", "invalid action rejected")
                 raise ApiError(400, "invalid_action")
 
@@ -316,6 +316,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             n = int(length)
         except ValueError:
+            raise ApiError(400, "invalid_request")
+        if n < 0 or self.headers.get("Transfer-Encoding") is not None:
+            self.close_connection = True
             raise ApiError(400, "invalid_request")
         if n > self.gateway.fx["max_body_bytes"]:
             self.close_connection = True

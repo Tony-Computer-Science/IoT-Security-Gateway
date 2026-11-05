@@ -20,8 +20,10 @@ A is the access point; B is the upstream station.
   off; DNS/HTTPS and configurable TCP/UDP echo tests use SPI only.
 - Board A implements an AP-only WPA2/AES network, DHCP, DNS propagation and
   client NAT onto SPI. Application policy and the management UI remain future work.
-- The existing web interface/mock and intentionally vulnerable target firmware
-  belong to the original LED-command demonstration and are unchanged.
+- Board C is an ESP32-C6 Wi-Fi LED device that contacts a PC at
+  **192.168.78.10:8000**. The PC serves the existing website and confirms LED
+  commands against device acknowledgements. See [third-board setup](firmware/target-device/README.md).
+  The firmware build and local API tests pass; third-board hardware testing is pending.
 - ESP32-C6 UART hardware checks verified AP/DHCP, phone internet access and
   peer-restart recovery; see [UART results](docs/uart-link.md). SPI hardware,
   simultaneous clients and extended soak checks remain on the
@@ -39,7 +41,12 @@ See [Board A instructions](firmware/station-board/README.md),
 [Board B instructions](firmware/bridge-board/README.md) and
 [test-host instructions](firmware/spi-test-host/README.md) for configuration,
 flashing, wiring, and tests. Do not commit generated `sdkconfig` or binaries:
-both router binaries contain their configured Wi-Fi credentials.
+all Wi-Fi firmware binaries contain their configured credentials.
+
+For the third C6, use [Board C instructions](firmware/target-device/README.md).
+On the Windows UI PC, run `python web/device_server.py --host 192.168.78.10 --port 8000`
+from this repository, then open `http://192.168.78.10:8000/` and use the
+operator login printed by the service.
 
 ```sh
 python3 tools/test/run_host_tests.py

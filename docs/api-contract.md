@@ -1,12 +1,19 @@
 # REST API contract
 
-**Version: 0.1.0**
+**Version: 0.2.0**
 
 This is the interface between the web interface (`web/`) and Board A's firmware
 (`firmware/station-board`). The mock server (`web/mock/server.py`) implements
 it for development. Any change follows the process in
 [CONTRIBUTING.md](../CONTRIBUTING.md#changes-to-shared-contracts): bump the
 version, add a changelog entry, get review from both sides, and update the mock.
+
+The PC-hosted lab implementation (`web/device_server.py`) serves the same
+browser endpoints and static website, backed by a real outbound-polling Board C.
+Its device channel is specified in [device API](device-api.md). No incoming
+connection to Board C is needed. The original Board A HTTPS implementation
+remains unimplemented; this PC mode does not claim the original gateway-only
+security architecture or authenticate the intentionally vulnerable device.
 
 Versioning follows semver. Before 1.0.0, a minor bump (0.x.0) may break
 compatibility, and a patch bump (0.0.x) must not.
@@ -17,7 +24,7 @@ compatibility, and a patch bump (0.0.x) must not.
 
 | Rule | Detail |
 |---|---|
-| Transport | HTTPS only, port 443, served by Board A. The mock server uses plain HTTP on localhost. |
+| Transport | Original Board A design: HTTPS port 443. Mock: HTTP localhost. PC lab mode: HTTP port 8000 on the private station subnet. |
 | Encoding | All request and response bodies are JSON (`Content-Type: application/json`), UTF-8. |
 | Authentication | Every endpoint except `POST /api/login` requires `Authorization: Bearer <token>`. |
 | Paths | Clients always use **relative** paths such as `/api/status`. Never hardcode a scheme, host, or port. |
@@ -85,6 +92,12 @@ Reads gateway and target status. Clients poll this at a fixed interval
 | `uptime_s` | Seconds since Board A booted. A decrease means Board A restarted. |
 | `seq` | Sequence number of the most recent event-log entry. Lets clients notice new events without fetching `/api/events`. *(See open question Q1.)* |
 
+In PC lab mode, `link_ok` and `target_reachable` indicate a device heartbeat
+within the previous eight seconds. They do not measure the A/B SPI/UART link
+or internet connectivity. `uptime_s` is PC service uptime and `output` is the
+latest device-reported state. The UI remains usable for local device control
+when bridge/internet access is down but the AP and PC are reachable.
+
 ### 2.4 `POST /api/command`
 
 Requests an output change on the target.
@@ -104,8 +117,16 @@ Request:
 | 429 | `{ "error": "rate_limited", "retry_after": number }` | Command rate limit exceeded. |
 | 502 | `{ "error": "target_unreachable" }` | Link is up, but Board B could not reach the target. |
 | 503 | `{ "error": "link_down" }` | The SPI link or Board B is not ready. Commands are disabled (R7). |
+| 504 | `{ "error": "command_unconfirmed" }` | PC mode delivered a command but could not confirm its result, or the device reported an actuator failure. The state may have changed. |
 
-Any non-200 response means the target state was **not** changed (R6).
+Admission failures and commands that were never delivered do not apply a
+state change. A **504**, client/network timeout, or lost response after
+delivery means the outcome is unknown; do not claim the LED was unchanged
+or retry automatically. Poll status for the latest device report. A 200 in
+PC mode is sent only after the device acknowledges the matching command ID
+and reports the requested state. This is a driver/state acknowledgement,
+not optical LED feedback. The original synchronous mock still changes its
+simulated state only on successful commands.
 
 ### 2.5 `GET /api/events?limit=<n>&outcome=<allowed|denied|alert>`
 
@@ -154,7 +175,8 @@ and oversized inputs. These responses apply to every path under `/api/`:
 | 405 | `{ "error": "method_not_allowed" }` | Known path, wrong method. |
 | 413 | `{ "error": "payload_too_large" }` | Body larger than the server limit. |
 
-The mock server implements these. The firmware body-size limit is TODO.
+The mock and PC service implement these with a 1024-byte request-body limit.
+The original Board A REST firmware body-size limit remains TODO.
 
 ---
 
@@ -173,6 +195,14 @@ The mock server implements these. The firmware body-size limit is TODO.
 ---
 
 ## 5. Changelog
+
+### 0.2.0
+
+- Add PC lab mode using the existing browser endpoints and a separately
+  specified outbound device channel.
+- Define heartbeat-based reachability/service uptime for PC mode.
+- Add 504 `command_unconfirmed`; distinguish ambiguous delivered commands
+  from pre-delivery refusal. Update the frontend's error handling and mock version.
 
 ### 0.1.0 (initial)
 

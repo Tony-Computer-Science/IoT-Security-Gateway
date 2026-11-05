@@ -1,11 +1,14 @@
 # web/mock: mock gateway API
 
 A development stand-in for Board A. It implements every endpoint in
-[docs/api-contract.md](../../docs/api-contract.md) (v0.1.0) with real behavior,
+[docs/api-contract.md](../../docs/api-contract.md) (v0.2.0) with real behavior,
 and serves `web/src` from the **same port**, so there is no CORS. Python 3
 standard library only.
 
 **Mock only.** The `/__mock/*` endpoints must never exist in firmware.
+For the physical third C6, run [the device service](../README.md#control-the-third-c6)
+instead. This mock simulates successful LED changes; it does not model the
+real device service's 504 acknowledgement failures.
 
 ## Current owner (provisional)
 
