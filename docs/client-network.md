@@ -28,6 +28,12 @@ The UI host's address must be updated if the AP subnet is changed.
 
 ## Windows UI computer
 
+The website/API is a service outside the ESP32 boards. The local Windows
+computer hosts it for a simpler demo instead of using a dedicated server.
+It still joins the protected AP; "outside the boards" does not mean an
+incoming connection from the upstream network. Follow
+[Setting Up](../README.md#setting-up) for the complete startup sequence.
+
 Join **IoT-Gateway**, then open **Settings → Network & internet → Wi-Fi →
 Manage known networks → IoT-Gateway → IP assignment → Edit**. Select
 **Manual**, enable **IPv4**, and enter:

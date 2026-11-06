@@ -2,6 +2,9 @@
 
 Project-wide design documents and shared contracts.
 
+Start with [Setting Up](../README.md#setting-up) in the root README for the
+board startup order, LED checks, phone internet test and separate web service.
+
 | Document | What it is | Status |
 |---|---|---|
 | [architecture.md](architecture.md) | Topology, trust zones, request flow, failure behavior | Draft |

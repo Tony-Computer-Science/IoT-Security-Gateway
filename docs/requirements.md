@@ -39,15 +39,18 @@ Loss of connectivity never enables a bypass path.
 
 ## Where each requirement lives
 
-This table is a navigation aid, not part of the requirements text. Keep it
-current as the implementation lands.
+This table is a navigation aid, not part of the requirements text above.
+It points to related current code, not a claim of full compliance. The web
+service is external to the boards and runs on a local computer for the demo;
+see [Setting Up](../README.md#setting-up) and the
+[architecture differences](architecture.md#original-graded-requirements).
 
 | Req | Primary location(s) |
 |---|---|
-| R1 | Topology (`docs/architecture.md`), `hardware/`, `firmware/bridge-board` (`ap_mode`, `target_client`) |
-| R2 | `firmware/station-board` (`net_station`, `auth`), `web/src/api.js` (in-memory token) |
-| R3 | `firmware/station-board` (`policy`), `firmware/bridge-board` (`spi_device` frame validation, fixed target) |
-| R4 | `firmware/station-board` (`policy`, `net_station` connection and timeout bounds) |
-| R5 | `firmware/station-board` (`eventlog`), `GET /api/events` |
-| R6 | REST contract (`docs/api-contract.md`), `web/` |
-| R7 | `docs/spi-protocol.md` (link readiness), `spi_host`, `spi_device`, session invalidation in `auth` |
+| R1 | `docs/architecture.md`, station/bridge routing policy; original command-only topology is not implemented |
+| R2 | `web/mock/server.py` (session/login logic reused by the service), `web/src/api.js` (in-memory token); current lab HTTP is not encrypted |
+| R3 | `web/device_server.py` (command validation), `firmware/target-device/main/target_protocol.c`; router traffic is not a fixed-target command allow-list |
+| R4 | `web/device_server.py` (bounded requests/pending commands), reused login/rate limits in `web/mock/server.py` |
+| R5 | Service event log in `web/mock/server.py`, exposed through authenticated `GET /api/events` |
+| R6 | `docs/api-contract.md`, `web/`, `firmware/target-device/` |
+| R7 | `firmware/common/gateway_link`, `firmware/common/gateway_protocol`, device boot/command invalidation and service sessions; local LED control does not require the upstream link |

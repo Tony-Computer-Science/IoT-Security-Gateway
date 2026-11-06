@@ -13,13 +13,19 @@ Upstream LAN / internet
 Repository names remain station-board=A and bridge-board=B, but their planned
 Wi-Fi roles are now A=AP and B=station. Production A provides AP/DHCP/NAT.
 The separate spi-test-host image stands in for A with its Wi-Fi radio disabled.
-Board C now joins A's AP as a Wi-Fi client and polls the UI PC at
-192.168.78.10:8000. The PC serves the existing browser API and confirms LED
+The website/API is a separate service external to the ESP32 boards. For
+simplicity, the demo hosts it on a local computer instead of a dedicated
+server. Board C joins A's AP as a Wi-Fi client and polls that computer at
+192.168.78.10:8000. The service serves the browser API and confirms LED
 commands using device acknowledgements. This application traffic stays on
 the AP; it does not pass through the A/B transport or require outside access.
 The intentionally unauthenticated device channel is documented in
 [device-api.md](device-api.md). Browser login authenticates operators to the
 PC service; it does not authenticate C or implement per-client network policy.
+The service PC is inside the protected AP in this demo; "external service"
+describes a process outside the boards, not unsolicited access from the
+upstream LAN. No website/API hosting on a board is required or planned for
+this setup. See the root [Setting Up guide](../README.md#setting-up).
 
 For tests with two signal wires plus common ground, both endpoints can select
 [UART test mode](uart-link.md) instead of SPI. It carries the same Ethernet

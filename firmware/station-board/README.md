@@ -26,8 +26,10 @@ readiness indicator. Configure or disable it under **Board identity LED**.
 
 The old `net_station` and `spi_host` placeholders were replaced. The legacy
 `auth`, `policy` and `eventlog` scaffolds remain available for later work but
-are not started. No web server or command API is provided. The `www` partition
-is retained, unmounted, for later UI work. This image replaces `spi-test-host`
+are not started. The website and command API belong to a separate service,
+run on a local computer for the demo; see [Setting Up](../../README.md#setting-up).
+The `www` partition is retained, unmounted, from the former onboard-hosting
+design and is not used by this setup. This image replaces `spi-test-host`
 on A during real client tests; B uses the same SPI 0.2.0 protocol.
 
 ## Configure and build

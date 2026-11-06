@@ -1,9 +1,11 @@
 # web/: browser interface
 
-The single-page web interface uses the REST API in
-[docs/api-contract.md](../docs/api-contract.md). The PC device service serves
-it today and connects it to the third C6. Serving it from Board A over HTTPS
-and LittleFS remains a separate firmware task.
+The single-page web interface and REST API are hosted by a **separate service
+outside the ESP32 boards**. For simplicity, the demo runs that service on a
+local computer at 192.168.78.10:8000 instead of a dedicated server. Board C
+initiates requests to it over Wi-Fi. See the root
+[Setting Up guide](../README.md#setting-up) and
+[browser API contract](../docs/api-contract.md).
 
 ## Current owner (provisional)
 
@@ -19,9 +21,9 @@ Lalit Dhakal. Any member may work here; the current owner reviews (see
 | `src/app.js` | Bootstrap, view registry, show/hide switching, status polling loop |
 | `src/api.js` | One function per endpoint; bearer token, JSON, error mapping. No DOM access. |
 | `device_server.py` | PC UI/API service with outbound device polling and command acknowledgements |
-| `mock/` | Python mock of Board A's API with failure injection, see [mock/README.md](mock/README.md) |
+| `mock/` | Simulated service/device behavior for UI development, see [mock/README.md](mock/README.md) |
 | `scripts/build.py` | Minify, gzip, size report, 60 KB budget check |
-| `scripts/mklittlefs.sh` | Pack `dist/` into a LittleFS image for the `www` partition |
+| `scripts/mklittlefs.sh` | Legacy asset packer from the former onboard-hosting design; unused by the service |
 | `dist/` | Build output. **Git-ignored.** Created by `build.py`. |
 
 The build scripts live in `scripts/`, not `build/`. ESP-IDF's ignore pattern
@@ -69,23 +71,23 @@ AP; it does not implement TLS or device identity verification. See the
 
 ```sh
 python3 web/scripts/build.py        # -> web/dist/*.gz, prints size report
-web/scripts/mklittlefs.sh           # -> web/littlefs.bin (needs mklittlefs)
 ```
 
 `build.py` exits non-zero if the gzipped total is over **60 KB**, or if the
 minified output uses `localStorage`, `sessionStorage`, `document.cookie`,
 `WebSocket`, or an external `http(s)://` URL.
 
-Board A should serve `/<file>` by reading `/<file>.gz` from LittleFS with
-`Content-Encoding: gzip` and the right `Content-Type`. It should also send the
-same `Content-Security-Policy` as the mock server (see `CSP` in
-`mock/server.py`).
+The current PC service serves `web/src/` directly; these generated assets
+are not needed for the setup procedure. The LittleFS packer is retained as
+legacy tooling and does not imply a plan to host the website on a board.
+The real service and mock send the same `Content-Security-Policy` (see `CSP`
+in `mock/server.py`).
 
 ## Constraints (absolute)
 
-These come from running on an ESP32-S3 whose flash and RAM are shared with
-mbedTLS and the event log. Don't work around them. If one seems wrong, raise
-it with the team.
+These lightweight frontend constraints are retained from the earlier design.
+They apply to the web assets even though hosting now belongs to the separate
+service, with no ESP32 flash or LittleFS deployment step.
 
 - **No framework or library** (React, Vue, Svelte, jQuery, Alpine, htmx, …).
 - **No bundler** (Vite, webpack, Rollup, esbuild, Parcel).
@@ -120,4 +122,5 @@ so no state relies on color alone:
 Login, status polling and LED control are implemented. The browser events
 view remains a TODO; `/api/events` is available from the backend. The PC
 service has local HTTP tests, but the physical third C6 and Windows PC still
-need an end-to-end test. Board A does not yet host this UI or its REST API.
+need an end-to-end test. The website/API belongs to the separate service;
+the boards provide networking and the IoT output.

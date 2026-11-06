@@ -2,18 +2,20 @@
 
 **Version: 0.2.0**
 
-This is the interface between the web interface (`web/`) and Board A's firmware
-(`firmware/station-board`). The mock server (`web/mock/server.py`) implements
-it for development. Any change follows the process in
+This is the interface between the web interface (`web/`) and the **separate
+web service**, hosted outside the ESP32 boards. For simplicity, the demo runs
+the service on a local computer instead of a dedicated server. The mock
+(`web/mock/server.py`) implements the browser endpoints for development.
+Any contract change follows the process in
 [CONTRIBUTING.md](../CONTRIBUTING.md#changes-to-shared-contracts): bump the
 version, add a changelog entry, get review from both sides, and update the mock.
 
-The PC-hosted lab implementation (`web/device_server.py`) serves the same
-browser endpoints and static website, backed by a real outbound-polling Board C.
-Its device channel is specified in [device API](device-api.md). No incoming
-connection to Board C is needed. The original Board A HTTPS implementation
-remains unimplemented; this PC mode does not claim the original gateway-only
-security architecture or authenticate the intentionally vulnerable device.
+The service (`web/device_server.py`) serves the browser endpoints and static
+website, backed by an outbound-polling Board C. Its device channel is specified
+in [device API](device-api.md). Follow [Setting Up](../README.md#setting-up)
+for the local demo. Board A and Board B provide networking; Board C controls
+the LED. The service does not authenticate the intentionally vulnerable target
+or claim the original gateway-only security architecture.
 
 Versioning follows semver. Before 1.0.0, a minor bump (0.x.0) may break
 compatibility, and a patch bump (0.0.x) must not.
@@ -24,7 +26,7 @@ compatibility, and a patch bump (0.0.x) must not.
 
 | Rule | Detail |
 |---|---|
-| Transport | Original Board A design: HTTPS port 443. Mock: HTTP localhost. PC lab mode: HTTP port 8000 on the private station subnet. |
+| Transport | Local-computer demo: HTTP port 8000 on the private station subnet. Mock: HTTP localhost. The current service does not implement TLS. |
 | Encoding | All request and response bodies are JSON (`Content-Type: application/json`), UTF-8. |
 | Authentication | Every endpoint except `POST /api/login` requires `Authorization: Bearer <token>`. |
 | Paths | Clients always use **relative** paths such as `/api/status`. Never hardcode a scheme, host, or port. |
@@ -64,7 +66,7 @@ Invalidates the current session token. No request body.
 
 ### 2.3 `GET /api/status`
 
-Reads gateway and target status. Clients poll this at a fixed interval
+Reads service and target status. Clients poll this at a fixed interval
 (default 2000 ms). There is no push channel.
 
 | Status | Body | Meaning |
@@ -87,16 +89,17 @@ Reads gateway and target status. Clients poll this at a fixed interval
 | Field | Meaning |
 |---|---|
 | `output` | Last known LED state on the target. |
-| `target_reachable` | Board B can currently reach Board C over the private network. |
-| `link_ok` | The SPI link between Board A and Board B is up and both boards are ready (R7). |
-| `uptime_s` | Seconds since Board A booted. A decrease means Board A restarted. |
+| `target_reachable` | The service received a valid Board C heartbeat within the previous eight seconds. |
+| `link_ok` | Device-channel availability, using the same heartbeat deadline. Does not measure the A/B SPI/UART link. |
+| `uptime_s` | Seconds since the web service started. A decrease means the service restarted. |
 | `seq` | Sequence number of the most recent event-log entry. Lets clients notice new events without fetching `/api/events`. *(See open question Q1.)* |
 
-In PC lab mode, `link_ok` and `target_reachable` indicate a device heartbeat
-within the previous eight seconds. They do not measure the A/B SPI/UART link
-or internet connectivity. `uptime_s` is PC service uptime and `output` is the
-latest device-reported state. The UI remains usable for local device control
-when bridge/internet access is down but the AP and PC are reachable.
+`output` is the latest device-reported state; before the first heartbeat,
+its initial value is off and reachability is false. Heartbeats do not prove
+internet connectivity. The UI remains usable for local device control when
+bridge/internet access is down but the AP and service computer are reachable.
+The standalone mock can inject `link_ok` and `target_reachable` independently;
+its original A/B-link simulation does not describe the real service's path.
 
 ### 2.4 `POST /api/command`
 
@@ -115,8 +118,8 @@ Request:
 | 401 | `{ "error": "invalid_session" }` | Token missing, unknown, or expired. |
 | 403 | `{ "error": "not_permitted" }` | Well-formed command refused by policy. |
 | 429 | `{ "error": "rate_limited", "retry_after": number }` | Command rate limit exceeded. |
-| 502 | `{ "error": "target_unreachable" }` | Link is up, but Board B could not reach the target. |
-| 503 | `{ "error": "link_down" }` | The SPI link or Board B is not ready. Commands are disabled (R7). |
+| 502 | `{ "error": "target_unreachable" }` | Target heartbeat is stale, or the pending command was never delivered to the device. |
+| 503 | `{ "error": "link_down" }` | Standalone mock's injected link failure; not emitted by the current real-device service. |
 | 504 | `{ "error": "command_unconfirmed" }` | PC mode delivered a command but could not confirm its result, or the device reported an actuator failure. The state may have changed. |
 
 Admission failures and commands that were never delivered do not apply a
@@ -175,8 +178,8 @@ and oversized inputs. These responses apply to every path under `/api/`:
 | 405 | `{ "error": "method_not_allowed" }` | Known path, wrong method. |
 | 413 | `{ "error": "payload_too_large" }` | Body larger than the server limit. |
 
-The mock and PC service implement these with a 1024-byte request-body limit.
-The original Board A REST firmware body-size limit remains TODO.
+The mock and real-device service implement these with a 1024-byte request-body
+limit. No browser REST server is part of the board firmware.
 
 ---
 
@@ -187,10 +190,10 @@ The original Board A REST firmware body-size limit remains TODO.
 - **Q2:** `403 not_permitted` has no trigger yet, since there is only one role.
   Keep it as reserved, or define when it applies.
 - **Q3:** Are command rate limits per session or global? The mock uses global.
-- **Q4:** Firmware values for the token lifetime, lockout threshold and
-  duration, command rate limit, event-log capacity, and maximum body size.
-  The mock's values are in `web/mock/fixtures.json` and are **not**
-  authoritative.
+- **Q4:** Deployment-specific values for token lifetime, lockout threshold
+  and duration, command rate limit, event-log capacity, and maximum body size.
+  The local service currently reuses `web/mock/fixtures.json`; dedicated-server
+  deployment settings remain a separate decision.
 
 ---
 
@@ -203,6 +206,9 @@ The original Board A REST firmware body-size limit remains TODO.
 - Define heartbeat-based reachability/service uptime for PC mode.
 - Add 504 `command_unconfirmed`; distinguish ambiguous delivered commands
   from pre-delivery refusal. Update the frontend's error handling and mock version.
+- Documentation clarified on 2026-11-06: the web service is external to all
+  boards, with a local-computer demo. Existing heartbeat, uptime and error
+  behavior is unchanged; onboard hosting is not a planned setup step.
 
 ### 0.1.0 (initial)
 

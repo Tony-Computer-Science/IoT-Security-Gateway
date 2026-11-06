@@ -3,7 +3,10 @@
 ESP-IDF **6.1**, **ESP32-C6**, 4 MB flash. Board C joins **IoT-Gateway** over
 Wi-Fi and polls the UI computer at **192.168.78.10:8000**. It uses the existing
 website's `led_on` / `led_off` commands. It needs USB power and no signal
-jumpers to station or bridge.
+jumpers to station or bridge. The website/API is a separate service outside
+the boards; running it on the local computer simplifies the demo instead of
+requiring a dedicated server. Follow [Setting Up](../../README.md#setting-up)
+for the full startup order and LED/network checks.
 
 This is an intentionally vulnerable lab target: its device channel is
 unauthenticated plain HTTP. Use it only on the private lab AP. Device IDs

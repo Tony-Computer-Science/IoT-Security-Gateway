@@ -1,6 +1,9 @@
 # eventlog
 
-A fixed-capacity ring buffer of events (auth outcomes, rejected commands, rate-limit events, target failures), read through `GET /api/events`.
+Legacy scaffold from the former onboard API design. It is not started; the
+current application event log and `GET /api/events` belong to the separate
+web service outside the boards. See
+[Setting Up](../../../../README.md#setting-up).
 
 **Requirements:** R5
 
@@ -11,8 +14,8 @@ updating this section and `.github/CODEOWNERS` in the same PR.
 
 ## Status
 
-Stub. `eventlog_init()` returns `ESP_ERR_NOT_SUPPORTED`. The public API is in
-`include/eventlog.h`; expand it as the design firms up.
+Unused stub. `eventlog_init()` returns `ESP_ERR_NOT_SUPPORTED`. The retained
+historical API is in `include/eventlog.h`.
 
 ## Notes
 

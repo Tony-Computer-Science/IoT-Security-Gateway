@@ -1,9 +1,12 @@
 # Board C to PC device API
 
 **Version 0.1.0.** One ESP32-C6-WROOM-1 target joins IoT-Gateway and initiates
-HTTP requests to **192.168.78.10:8000**. The PC serves the existing website
-and authenticated browser API from that same origin. It never opens a
+HTTP requests to **192.168.78.10:8000**. The website and authenticated browser
+API are a separate service external to the boards. For simplicity, the demo
+runs this service on a local computer instead of a dedicated server. The PC
+serves both from the same origin. It never opens a
 connection to Board C. This adds no port forwarding through station/bridge.
+See [Setting Up](../README.md#setting-up) for startup order and LED checks.
 
 Board C remains an intentionally vulnerable **lab-only plain-HTTP device**:
 this channel has no device authentication or TLS. Its public device ID is

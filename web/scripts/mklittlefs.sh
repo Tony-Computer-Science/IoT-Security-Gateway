@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Pack web/dist/ into a LittleFS image for Board A's web-asset partition.
+# Legacy asset packer from the former onboard-hosting design.
+# The separate web service does not use this script or require board flashing.
 #
 # Usage:  web/scripts/mklittlefs.sh [output.bin]
 #
@@ -10,13 +11,8 @@
 # The partition name and size are read from firmware/station-board/partitions.csv
 # so the image always matches the partition table.
 #
-# TODO(firmware): BLOCK_SIZE and PAGE_SIZE must match the esp_littlefs
-#   component's Kconfig (CONFIG_LITTLEFS_BLOCK_SIZE / CONFIG_LITTLEFS_PAGE_SIZE)
-#   once that component is added to station-board. 4096 / 256 are the
-#   esp_littlefs defaults; confirm before relying on this image.
-# TODO(firmware): consider replacing this script with esp_littlefs's CMake
-#   helper `littlefs_create_partition_image(<partition> ../../web/dist
-#   FLASH_IN_PROJECT)` so `idf.py flash` writes the web assets automatically.
+# Retained block/page sizes are historical values, not a deployment contract
+# for the current web service. Onboard hosting is not part of the setup.
 
 set -euo pipefail
 

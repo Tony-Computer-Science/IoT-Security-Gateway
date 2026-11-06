@@ -12,6 +12,96 @@ The board names remain **station-board (A)** and **bridge-board (B)** for
 repository compatibility. These names do not describe their new Wi-Fi modes:
 A is the access point; B is the upstream station.
 
+## Setting Up
+
+The website and its API are a **separate service running outside the ESP32
+boards**. For simplicity, this demo runs that service on a local computer
+instead of a dedicated server. The computer joins **IoT-Gateway** and uses
+the fixed address **192.168.78.10**. Board C contacts it over Wi-Fi; station
+and bridge provide networking. Hosting the website on a board is not part
+of this setup.
+
+Before the first run, build/configure and flash each board using the
+[station](firmware/station-board/README.md),
+[bridge](firmware/bridge-board/README.md) and
+[IoT device](firmware/target-device/README.md) instructions. Bridge needs the
+upstream Wi-Fi credentials; Board C needs the separate station AP password.
+Keep passwords in private configuration, not this README.
+
+1. **Power on station and bridge.** Keep their configured wired link connected.
+   For the current two-wire UART demo, connect station GPIO6 TX to bridge GPIO7
+   RX, station GPIO7 RX to bridge GPIO6 TX, and GND to GND. Both must use UART
+   at 921600 baud; see [wiring and configuration](docs/uart-link.md).
+   Each board also needs USB power. Check the controllable RGB LEDs against
+   the table below. Their identity colors do not prove Wi-Fi or internet access.
+2. **Join the station network from a phone and check internet access.** In
+   the phone's Wi-Fi settings, join **IoT-Gateway** using the station AP
+   password. Temporarily turn off mobile data so the test uses the gateway.
+   Open `http://example.com` and confirm the page loads; do not rely only on
+   the phone's connection label. If it fails, check that the phone joined
+   **IoT-Gateway** and that bridge joined the intended upstream network
+   (**Tony IoT** in this lab) with a valid IP address. Use the troubleshooting
+   table below before proceeding with the internet test.
+3. **Connect the computer that will host the web service.** Join that computer
+   to **IoT-Gateway** too. On the Windows demo PC, set Wi-Fi IPv4 to
+   **192.168.78.10**, subnet mask **255.255.255.0**, gateway **192.168.78.1**,
+   and the upstream DNS supplied by bridge. Follow the
+   [Windows fixed-IP and firewall steps](docs/client-network.md#windows-ui-computer).
+   Check `ipconfig` shows .10 on the Wi-Fi adapter. Only this computer should
+   use .10; the phone and IoT device obtain addresses automatically.
+4. **Start the web service on that computer.** With Python 3.9 or later,
+   open a terminal in this repository's root and run:
+
+   ```powershell
+   python web/device_server.py --host 192.168.78.10 --port 8000
+   ```
+
+   Leave the terminal open. Allow TCP 8000 from **192.168.78.0/24** using the
+   scoped firewall rule in the Windows guide. On the PC or the phone, open
+   `http://192.168.78.10:8000/`. Sign in as **operator** with the password
+   printed by the service. This login password is separate from the Wi-Fi
+   password. Use `device_server.py` for hardware control; the mock server
+   only simulates a device. Until Board C connects, unavailable device status
+   and disabled command buttons are expected.
+5. **Power on the third C6, the IoT device.** Its firmware must have the
+   **IoT-Gateway** SSID/passphrase, service address **192.168.78.10**, port
+   **8000**, and device ID **iot-c6**. It joins Wi-Fi automatically and polls
+   the service; it needs no signal jumpers to the other boards. Wait for
+   reachable status in the website, then click **Turn on**: its controllable
+   RGB LED should become **green** after device confirmation. Click **Turn
+   off** and verify it goes dark. Off at startup is expected, not a connection
+   failure. Station remains blue and bridge remains red.
+
+| Board | Expected controllable RGB LED |
+|---|---|
+| Station / A | **Blue**, identifying the station firmware |
+| Bridge / B | **Red**, identifying the bridge firmware |
+| IoT device / C | **Off at startup**, **green after Turn on**, off after Turn off |
+
+Look at the controllable RGB LED, not the separate power light, which may
+stay green. These defaults apply to the matching C6 development boards with
+the RGB LED on GPIO8. The phone, service PC and IoT device use three of the
+station AP's four default client slots.
+
+If a check fails:
+
+| Symptom | What to check |
+|---|---|
+| Wrong board color or IoT-Gateway is missing | Confirm power, board labels and the correct firmware image. Check AP configuration and startup logs; a power light alone does not identify the firmware. |
+| Phone joins but a webpage cannot load | Confirm mobile data is off, the phone joined IoT-Gateway and DHCP gave it 192.168.78.100–199 with gateway .1. Check bridge's upstream SSID/password and IP, and test that upstream network's internet separately. Check crossed UART wires, common ground and matching UART mode/baud. After bridge is online, reconnect the phone to refresh DHCP/DNS. |
+| Service fails to bind to 192.168.78.10 | Confirm the service PC joined IoT-Gateway and .10 is assigned to its Wi-Fi adapter before launch. Check another program is not already using port 8000. |
+| Website opens on the PC but not on the phone | Confirm both joined IoT-Gateway, the URL includes .10:8000, and the PC firewall permits TCP 8000 from 192.168.78.0/24. Do not disable the firewall. |
+| Website opens but the device stays unavailable | Confirm Board C is flashed/configured for IoT-Gateway with the AP password, .10:8000 and matching device ID. Keep the real device service running. Inspect Board C's Wi-Fi/poll logs and the PC firewall. The LED can correctly be off while connected. |
+| A command has an unknown result | Wait for a fresh device status report before retrying, then compare the reported state with the physical LED. Check service/device logs if confirmation continues to fail. |
+
+Local website and LED control use the station AP and can work without
+upstream internet; the phone's internet test checks a separate routing path.
+No port forwarding or public exposure is needed for this local demo. A
+dedicated server can host the separate service later, but Board C's configured
+service IPv4 address/port and outbound network reachability must match that
+deployment. The current device channel is lab-only plain HTTP; see the
+[device API and its limitations](docs/device-api.md).
+
 ## Current status
 
 - Board B implements personal WPA2/WPA3 uplink, DHCP/reconnection, a bounded
@@ -19,7 +109,8 @@ A is the access point; B is the upstream station.
 - `firmware/spi-test-host` is a separate Board A test image. Its radio stays
   off; DNS/HTTPS and configurable TCP/UDP echo tests use SPI only.
 - Board A implements an AP-only WPA2/AES network, DHCP, DNS propagation and
-  client NAT onto SPI. Application policy and the management UI remain future work.
+  client NAT onto SPI. Per-device network policy remains future work; the
+  website/API runs as the separate service described above.
 - Board C is an ESP32-C6 Wi-Fi LED device that contacts a PC at
   **192.168.78.10:8000**. The PC serves the existing website and confirms LED
   commands against device acknowledgements. See [third-board setup](firmware/target-device/README.md).

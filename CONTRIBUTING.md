@@ -51,7 +51,7 @@ Name: `<area>/<short-description>`, lowercase, hyphens.
 | `tools/` | `tools/` | anyone |
 | `chore/` | repo config, `.github/`, cross-cutting setup | anyone |
 
-Examples: `web/mock-server`, `station/https-server`, `bridge/spi-framing`.
+Examples: `web/device-service`, `station/client-dhcp`, `bridge/spi-framing`.
 
 Keep topic branches short-lived: open the PR within a few days, even as a
 draft.
@@ -115,7 +115,7 @@ When a commit implements or affects a requirement, name it in the body, e.g.
 
 ### Changes to shared contracts
 
-[docs/api-contract.md](docs/api-contract.md) (web ↔ Board A) and
+[docs/api-contract.md](docs/api-contract.md) (browser ↔ separate web service) and
 [docs/spi-protocol.md](docs/spi-protocol.md) (Board A ↔ Board B) are each
 implemented by more than one person. A PR that changes either one must:
 

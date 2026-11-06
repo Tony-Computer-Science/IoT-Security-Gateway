@@ -3,10 +3,15 @@
 Code: the "Control view" and "Status polling" sections of `web/src/app.js`.
 Contract: `GET /api/status` and `POST /api/command` in `docs/api-contract.md`.
 
+The website/API runs as a separate service outside the boards. The demo
+hosts it on the local computer at 192.168.78.10:8000. Board C polls the
+service and acknowledges commands; local control does not traverse the
+station/bridge link. See [Setting Up](../../README.md#setting-up).
+
 ## What the user sees
 
 Three status rows are always visible: the LED output (On or Off), whether the
-target device is reachable, and whether the board-to-board link is up. Below
+target device is reachable, and whether its channel is available. Below
 them are two buttons, "Turn on" and "Turn off", and two message lines. The
 first message line shows the gateway's health. The second shows what happened
 to the user's last click.
@@ -19,29 +24,27 @@ with the target's real state: a successful command response, or a status
 update. While a command is on its way, the view shows a "Sending" message and
 the LED row keeps its old value.
 
-Without this rule, here is what an R7 failure would look like. The user clicks
-"Turn on". The screen immediately says "On". But the link between the two
-gateway boards is down, so the command never reaches the device and the real
-LED stays off. If the user looked away before the error appeared, they would
-believe the light is on. R7 says a failure must never look like a success, and
-R6 says a rejected request leaves the device unchanged. So the screen must
-stay unchanged too.
+For example, if the user clicks "Turn on" while Board C loses Wi-Fi, an
+immediate screen change could look successful even though the device never
+received the command. Conversely, a lost acknowledgement can mean the LED
+changed without the service confirming it. The service returns 504 for an
+unconfirmed delivered command; the UI keeps the last confirmed output,
+states that the result is unknown, and reconciles a later device report.
+It never retries automatically or claims an ambiguous result left the LED
+unchanged.
 
 ## Link down versus target unreachable
 
-These are two different failures in two different places, and they look
-different on screen.
+The real service derives both `link_ok` and `target_reachable` from a valid
+device heartbeat within eight seconds. They measure the device channel,
+not SPI/UART or internet access. An expired heartbeat disables commands and
+shows the channel-unavailable style (striped box, ⨯ symbol). A command that
+was never delivered returns 502 and uses the target-unreachable style
+(dotted box, ⚠ symbol) until status is refreshed.
 
-- **Link down** (striped box, ⨯ symbol): the station board (Board A) cannot
-  talk to the bridge board (Board B) over the SPI wire. Nothing can reach the
-  device at all.
-- **Target unreachable** (dotted box, ⚠ symbol): the two gateway boards are
-  talking fine, but the bridge board cannot reach the IoT device over its
-  private Wi-Fi.
-
-In both cases the buttons are disabled, and the message names which part
-failed. If both are reported, link down is shown, because when the boards
-cannot talk, Board A has no way to know about the device.
+Only the standalone mock simulates independent A/B-link and target failures.
+Its injected 503 must not be mistaken for hardware link monitoring by the
+real PC service.
 
 ## How the polling loop avoids overlap
 

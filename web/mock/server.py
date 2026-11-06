@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Development mock of Board A's REST API, plus a static server for web/src.
+"""Development mock of the separate web service, serving web/src and its API.
 
 Implements docs/api-contract.md v0.2.0 with real behavior (token issuance and
 expiry, failed-login lockout, command rate limit, bounded event log, simulated

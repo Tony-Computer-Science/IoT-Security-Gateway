@@ -1,6 +1,9 @@
 # policy
 
-Decides whether a request may proceed. It holds the command allow-list (`led_on`, `led_off`), validates input (method, path, body size, JSON shape, values), and enforces the configurable limits on failed logins and command rate.
+Legacy scaffold from the former onboard API design. It is not started; the
+current command validation and login/request limits belong to the separate
+web service outside the boards. See
+[Setting Up](../../../../README.md#setting-up).
 
 **Requirements:** R3, R4
 
@@ -11,8 +14,8 @@ updating this section and `.github/CODEOWNERS` in the same PR.
 
 ## Status
 
-Stub. `policy_init()` returns `ESP_ERR_NOT_SUPPORTED`. The public API is in
-`include/policy.h`; expand it as the design firms up.
+Unused stub. `policy_init()` returns `ESP_ERR_NOT_SUPPORTED`. The retained
+historical API is in `include/policy.h`.
 
 ## Notes
 
