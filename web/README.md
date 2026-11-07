@@ -1,5 +1,9 @@
 # web/: browser interface
 
+For the real ESP target, use `web/device_server.py`, not the mock. See
+[the S3 live-test guide](../docs/s3-live-test.md). This branch retains main's
+implemented login/control/events views and integrates the hardware backend.
+
 The single-page web interface that Board A (station board) serves over HTTPS
 from a LittleFS partition. It talks to Board A only through the REST API in
 [docs/api-contract.md](../docs/api-contract.md).
@@ -87,6 +91,5 @@ so no state relies on color alone:
 
 ## What is stubbed
 
-`app.js` has the view switching and polling skeleton working. The rendering
-functions `renderLogin`, `renderStatus`, `renderStatusError`, `renderControl`,
-and `renderEvents` are `TODO` stubs with their signatures in place.
+The login, control, events and polling views are implemented. Live-device mode
+uses heartbeat/service labels; the mock retains its simulated board-link view.

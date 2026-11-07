@@ -1,12 +1,21 @@
 # REST API contract
 
-**Version: 0.1.0**
+**Version: 0.3.0**
 
-This is the interface between the web interface (`web/`) and Board A's firmware
-(`firmware/station-board`). The mock server (`web/mock/server.py`) implements
-it for development. Any change follows the process in
+This is the interface between the web interface (`web/`) and the **separate
+web service**, hosted outside the ESP32 boards. For simplicity, the demo runs
+the service on a local computer instead of a dedicated server. The mock
+(`web/mock/server.py`) implements the browser endpoints for development.
+Any contract change follows the process in
 [CONTRIBUTING.md](../CONTRIBUTING.md#changes-to-shared-contracts): bump the
 version, add a changelog entry, get review from both sides, and update the mock.
+
+The service (`web/device_server.py`) serves the browser endpoints and static
+website, backed by an outbound-polling Board C. Its device channel is specified
+in [device API](device-api.md). Follow [S3 live test](s3-live-test.md)
+for the local demo. Board A and Board B provide networking; Board C controls
+the LED. The service does not authenticate the intentionally vulnerable target
+or claim the original gateway-only security architecture.
 
 Versioning follows semver. Before 1.0.0, a minor bump (0.x.0) may break
 compatibility, and a patch bump (0.0.x) must not.
@@ -17,7 +26,7 @@ compatibility, and a patch bump (0.0.x) must not.
 
 | Rule | Detail |
 |---|---|
-| Transport | HTTPS only, port 443, served by Board A. The mock server uses plain HTTP on localhost. |
+| Transport | Local-computer demo: HTTP port 8000 on the private station subnet. Mock: HTTP localhost. The current service does not implement TLS. |
 | Encoding | All request and response bodies are JSON (`Content-Type: application/json`), UTF-8. |
 | Authentication | Every endpoint except `POST /api/login` requires `Authorization: Bearer <token>`. |
 | Paths | Clients always use **relative** paths such as `/api/status`. Never hardcode a scheme, host, or port. |
@@ -57,7 +66,7 @@ Invalidates the current session token. No request body.
 
 ### 2.3 `GET /api/status`
 
-Reads gateway and target status. Clients poll this at a fixed interval
+Reads service and target status. Clients poll this at a fixed interval
 (default 2000 ms). There is no push channel.
 
 | Status | Body | Meaning |
@@ -69,7 +78,7 @@ Reads gateway and target status. Clients poll this at a fixed interval
 
 ```json
 {
-  "output": "on" | "off",
+  "output": "on" | "off" | null,
   "target_reachable": boolean,
   "link_ok": boolean,
   "uptime_s": number,
@@ -80,10 +89,17 @@ Reads gateway and target status. Clients poll this at a fixed interval
 | Field | Meaning |
 |---|---|
 | `output` | Last known LED state on the target. |
-| `target_reachable` | Board B can currently reach Board C over the private network. |
-| `link_ok` | The SPI link between Board A and Board B is up and both boards are ready (R7). |
-| `uptime_s` | Seconds since Board A booted. A decrease means Board A restarted. |
+| `target_reachable` | The service received a valid Board C heartbeat within the previous eight seconds. |
+| `link_ok` | Device-channel availability, using the same heartbeat deadline. Does not measure the A/B SPI/UART link. |
+| `uptime_s` | Seconds since the web service started. A decrease means the service restarted. |
 | `seq` | Sequence number of the most recent event-log entry. Lets clients notice new events without fetching `/api/events`. *(See open question Q1.)* |
+
+`output` is the latest device-reported state; before the first heartbeat,
+its value is null and reachability is false. Heartbeats do not prove
+internet connectivity. The UI remains usable for local device control when
+bridge/internet access is down but the AP and service computer are reachable.
+The standalone mock can inject `link_ok` and `target_reachable` independently;
+its original A/B-link simulation does not describe the real service's path.
 
 ### 2.4 `POST /api/command`
 
@@ -102,10 +118,18 @@ Request:
 | 401 | `{ "error": "invalid_session" }` | Token missing, unknown, or expired. |
 | 403 | `{ "error": "not_permitted" }` | Well-formed command refused by policy. |
 | 429 | `{ "error": "rate_limited", "retry_after": number }` | Command rate limit exceeded. |
-| 502 | `{ "error": "target_unreachable" }` | Link is up, but Board B could not reach the target. |
-| 503 | `{ "error": "link_down" }` | The SPI link or Board B is not ready. Commands are disabled (R7). |
+| 502 | `{ "error": "target_unreachable" }` | Target heartbeat is stale, or the pending command was never delivered to the device. |
+| 503 | `{ "error": "link_down" }` | Standalone mock's injected link failure; not emitted by the current real-device service. |
+| 504 | `{ "error": "command_unconfirmed" }` | PC mode delivered a command but could not confirm its result, or the device reported an actuator failure. The state may have changed. |
 
-Any non-200 response means the target state was **not** changed (R6).
+Admission failures and commands that were never delivered do not apply a
+state change. A **504**, client/network timeout, or lost response after
+delivery means the outcome is unknown; do not claim the LED was unchanged
+or retry automatically. Poll status for the latest device report. A 200 in
+PC mode is sent only after the device acknowledges the matching command ID
+and reports the requested state. This is a driver/state acknowledgement,
+not optical LED feedback. The original synchronous mock still changes its
+simulated state only on successful commands.
 
 ### 2.5 `GET /api/events?limit=<n>&outcome=<allowed|denied|alert>`
 
@@ -154,7 +178,8 @@ and oversized inputs. These responses apply to every path under `/api/`:
 | 405 | `{ "error": "method_not_allowed" }` | Known path, wrong method. |
 | 413 | `{ "error": "payload_too_large" }` | Body larger than the server limit. |
 
-The mock server implements these. The firmware body-size limit is TODO.
+The mock and real-device service implement these with a 1024-byte request-body
+limit. No browser REST server is part of the board firmware.
 
 ---
 
@@ -165,14 +190,37 @@ The mock server implements these. The firmware body-size limit is TODO.
 - **Q2:** `403 not_permitted` has no trigger yet, since there is only one role.
   Keep it as reserved, or define when it applies.
 - **Q3:** Are command rate limits per session or global? The mock uses global.
-- **Q4:** Firmware values for the token lifetime, lockout threshold and
-  duration, command rate limit, event-log capacity, and maximum body size.
-  The mock's values are in `web/mock/fixtures.json` and are **not**
-  authoritative.
+- **Q4:** Deployment-specific values for token lifetime, lockout threshold
+  and duration, command rate limit, event-log capacity, and maximum body size.
+  The local service currently reuses `web/mock/fixtures.json`; dedicated-server
+  deployment settings remain a separate decision.
 
 ---
 
 ## 5. Changelog
+
+### 0.3.0 — live target integration
+
+The real-device service adds `status_source: "device_http"`, `last_seen_s`
+(seconds since the last accepted device report, or null before first contact),
+and `device_uptime_s` (uptime in the last report, or null). Before any report,
+`output` is null rather than a fabricated off state. After expiry it retains
+the last report; clients must inspect reachability/freshness. Device-reported
+uptime is a snapshot, not an advancing clock. The standalone mock omits these
+optional fields and retains its simulated link/target behavior. Clients select
+live-device labels only when `status_source` identifies the real service.
+
+
+### 0.2.0
+
+- Add PC lab mode using the existing browser endpoints and a separately
+  specified outbound device channel.
+- Define heartbeat-based reachability/service uptime for PC mode.
+- Add 504 `command_unconfirmed`; distinguish ambiguous delivered commands
+  from pre-delivery refusal. Update the frontend's error handling and mock version.
+- Documentation clarified on 2026-11-06: the web service is external to all
+  boards, with a local-computer demo. Existing heartbeat, uptime and error
+  behavior is unchanged; onboard hosting is not a planned setup step.
 
 ### 0.1.0 (initial)
 
