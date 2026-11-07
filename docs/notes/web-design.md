@@ -32,13 +32,16 @@ capitals like instrument panel printing.
 The first version gave each segment two labels above its value, the values
 sat at different heights, and the LED was squeezed into a corner. Now:
 
-- **One unit, one label, one value.** The medium ("SPI wire, station board A
-  to bridge board B") is small print beneath the value, not a second heading.
+- **One unit, one label, one value.** The medium ("UART wire, bridge board B
+  to station board A") is small print beneath the value, not a second heading.
 - **One row of readouts.** All three values are the same size and weight and
   share one baseline, so the eye scans a single line.
 - **The output is not an afterthought.** The LED has the same weight as the
   other two, and its keys and command result sit directly beneath it.
-- **The diagram recedes.** The A, B, C boxes and wires are small, grey and
+- **The diagram follows the hardware.** It reads B, A, C: the bridge board B
+  joins the upstream Wi-Fi, a UART wire runs from B to the station board A,
+  and A creates the private Wi-Fi that the device C joins.
+- **The diagram recedes.** The B, A, C boxes and wires are small, grey and
   thin, because they answer "where?" only when something fails. A failed hop
   then takes its state colour, opens a gap, and shows the failure icon.
 - **Health comes first.** A failure message sits at the top of the panel.
@@ -58,7 +61,7 @@ distinct when projected badly or printed in grayscale, in both themes:
 | link down | broken chain link | diagonal hatching |
 
 Link down and target unreachable are different faults with different fixes
-(the wire between the gateway boards, or the radio link to the device), so
+(the UART wire between the gateway boards, or A's Wi-Fi link to the device), so
 they differ in icon, pattern, colour, and position on the path.
 
 ## The LED lamp follows confirmed state only

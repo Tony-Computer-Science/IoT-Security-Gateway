@@ -32,16 +32,20 @@ stay unchanged too.
 These are two different failures in two different places, and they look
 different on screen.
 
-- **Link down** (striped box, ⨯ symbol): the station board (Board A) cannot
-  talk to the bridge board (Board B) over the SPI wire. Nothing can reach the
-  device at all.
-- **Target unreachable** (dotted box, ⚠ symbol): the two gateway boards are
-  talking fine, but the bridge board cannot reach the IoT device over its
+The hardware runs in this order: the bridge board (Board B) joins the
+upstream Wi-Fi, a UART wire connects it to the station board (Board A), and A
+creates the private Wi-Fi "IoT-Gateway" that the IoT device (Board C) and the
+operator's laptop join. The diagram on the page reads in the same order:
+B, then A, then C.
+
+- **Link down** (hatched box, broken chain link icon): the bridge board and
+  the station board cannot talk over the UART wire.
+- **Target unreachable** (dotted box, Wi-Fi with a slash): the gateway boards
+  are talking fine, but the station board cannot reach the IoT device on its
   private Wi-Fi.
 
 In both cases the buttons are disabled, and the message names which part
-failed. If both are reported, link down is shown, because when the boards
-cannot talk, Board A has no way to know about the device.
+failed. If both are reported, link down is shown first.
 
 ## How the polling loop avoids overlap
 
