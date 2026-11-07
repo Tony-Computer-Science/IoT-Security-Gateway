@@ -320,9 +320,9 @@ button:disabled,
   font: 700 0.875rem/1 var(--font-mono);
 }
 
-/* The wire's pattern names the medium: double line for the SPI bus, dots for
-   the radio hop. A failed hop takes its state colour, opens a gap, and shows
-   the same icon as the health message. */
+/* The wire's pattern names the medium: a double line for the UART link (its
+   TX and RX wires), dots for the radio hop. A failed hop takes its state
+   colour, opens a gap, and shows the same icon as the health message. */
 .unit-link { --wire: 4px double var(--rule); }
 .unit-target { --wire: 3px dotted var(--rule); }
 .unit:has(dd[data-value="unknown"]) { --wire: 2px dashed var(--rule); }

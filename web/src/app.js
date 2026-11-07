@@ -344,9 +344,9 @@ function formatSeconds(s) {
 // request leaves the target unchanged, so the display must stay unchanged too.
 
 const LINK_DOWN_TEXT =
-  'Board-to-board link is down: the station board cannot talk to the bridge board. Commands are disabled.';
+  'Board-to-board link is down: the station board and the bridge board cannot talk over the UART wire. Commands are disabled.';
 const TARGET_UNREACHABLE_TEXT =
-  'Target device unreachable: the bridge board cannot reach the IoT device. Commands are disabled.';
+  'Target device unreachable: the station board cannot reach the IoT device on its private Wi-Fi. Commands are disabled.';
 const GATEWAY_UNREACHABLE_TEXT =
   'Could not reach the gateway. Check your connection and try again.';
 
@@ -399,8 +399,9 @@ function renderStatus(status) {
   // `shown` unhealthy, so its more specific failure message is kept.
   if (wasHealthy && !isHealthy()) setStateMessage('command-result', '', '');
 
-  // Link down is checked first: if the boards cannot talk, Board A has no way
-  // to know whether the target is reachable.
+  // Link down is checked first, so if both are reported only link down is
+  // shown. (The old reason, that A could not see the target without B, no
+  // longer holds: C is on A's own Wi-Fi. The order itself is unchanged.)
   if (!shown.link_ok) {
     setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
   } else if (!shown.target_reachable) {
@@ -501,13 +502,13 @@ function handleCommandError(err) {
       shown.target_reachable = false;
       setStateMessage('control-state', 'target-unreachable', TARGET_UNREACHABLE_TEXT);
       setStateMessage('command-result', 'target-unreachable',
-        `Command not delivered: the bridge board could not reach the IoT device. ${unchanged}`);
+        `Command not delivered: the station board could not reach the IoT device. ${unchanged}`);
       break;
     case api.ErrorCode.LINK_DOWN:
       shown.link_ok = false;
       setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
       setStateMessage('command-result', 'link-down',
-        `Command not delivered: the station board cannot talk to the bridge board. ${unchanged}`);
+        `Command not delivered: the station board and the bridge board cannot talk over the UART wire. ${unchanged}`);
       break;
     case api.ErrorCode.NETWORK:
     case api.ErrorCode.TIMEOUT:
