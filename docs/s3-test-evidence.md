@@ -33,15 +33,42 @@ command messaging. A/B firmware is unchanged from main.
 
 ## Hardware observations
 
-USB identification only: ESP32-S3 revision 0.2, 16 MB quad flash and 8 MB PSRAM.
+ESP32-S3 revision 0.2, 16 MB quad flash and 8 MB PSRAM on an HW678 carrier.
 A full 16 MB original flash backup was copied to both operator machines with
-matching SHA-256 checksums. No flash erase/write or security-fuse change occurred.
-The backup is private and excluded from this repository.
+matching SHA-256 checksums before flashing. The backup is private and excluded
+from this repository. No security-fuse changes were made.
+
+The live S3 image built successfully with ESP-IDF 6.1, DIO/16 MB flash,
+USB Serial/JTAG console and GPIO48. The app is 841,008 bytes. Bootloader,
+partition table and application were transferred with matching SHA-256 hashes,
+then flashed at the exact build-generated offsets; esptool verified written data.
+Wi-Fi credentials and the firmware containing them remain private.
+
+Physical bench acceptance passed:
+
+- The target joined the private Wi-Fi and sent reports through the MacBook's
+  LAN-bound SSH forward to the development service. No software actor was running.
+- Browser login succeeded; Control showed UP/REACHABLE and fresh device reports.
+- An authenticated API LED-on command was acknowledged by the physical ESP;
+  Ivan visually confirmed the RGB LED glowed green, verifying GPIO48 on this unit.
+- Clicking TURN OFF in the browser produced an acknowledgement and OFF status;
+  Ivan visually confirmed the RGB LED turned off while the power light remained on.
+- Events showed both confirmed commands. With Events open, holding the ESP in its
+  ROM bootloader stopped reports. The eight-second heartbeat timeout generated an
+  alert. Control then showed DOWN/UNREACHABLE and disabled both command buttons.
+- A USB hard reset restarted the firmware. The target rejoined, fresh reports
+  restored UP/REACHABLE and enabled controls, and Events recorded the restart and
+  recovered channel. This is a controlled firmware-stop/restart test, not a USB
+  unplug or extended radio reliability test.
+
+The selected GPIO48 mapping was corroborated by an
+[HW-678 implementation](https://github.com/shantanuk47/ESP32_S3_N8R2_RGB)
+for another memory variant; physical observation above verifies this tested unit.
 
 ## Pending or limited
 
-- Exact carrier/WS2812 pin, private Wi-Fi configuration, S3 flash, physical LED,
-  radio reliability and unplug/reconnect acceptance remain pending.
+- Extended radio reliability, physical USB unplug/replug and operation after
+  laptop sleep or a LAN-address change remain untested.
 - Tony's A/B gateway and network isolation have not been tested by this setup.
 - On this macOS host, AddressSanitizer hangs inside its allocator/shadow-memory
   initialization before test main. UBSan passed using
@@ -59,3 +86,12 @@ The backup is private and excluded from this repository.
   and the most recent device report.
 - [Disconnect event](assets/s3-test/simulator-disconnect-event.png): Alert filter
   and heartbeat expiry while the Events page remains active.
+
+## Screenshots (physical S3 target)
+
+- [Connected S3](assets/s3-test/hardware-online.png): fresh reports and acknowledged
+  ON state, paired with Ivan's visual confirmation of the green LED.
+- [Heartbeat expiry](assets/s3-test/hardware-heartbeat-expired.png): Alert filter
+  while the physical target firmware was stopped in its ROM bootloader.
+- [Hardware events](assets/s3-test/hardware-events.png): confirmed on/off commands,
+  heartbeat expiry, device restart and recovered channel.

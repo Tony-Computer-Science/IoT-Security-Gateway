@@ -67,6 +67,14 @@ and compilation are on different computers, transfer the build's bootloader,
 partition table, app and flashing arguments privately; use the offsets generated
 for that exact target. The original board image is the rollback artifact.
 
+## Verified bench configuration
+
+An HW678 carrier with an ESP32-S3-N16R8 module passed the basic physical test on
+2026-11-07 using GPIO48 for its onboard addressable RGB LED. The operator observed
+green for ON and no RGB light for OFF; the separate power LED stays on. This
+observation applies to that tested carrier, not every board sold with an N16R8
+module. See the evidence report below for the method and remaining limitations.
+
 ## Acceptance
 
 1. Before first contact: output is Unknown, device unavailable, commands disabled.
