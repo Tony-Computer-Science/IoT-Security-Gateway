@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Verify a LittleFS image of the web assets against web/dist.
+"""Verify a legacy LittleFS image of the web assets against web/dist.
+
+The current fixed-IP PC service does not use an asset image or mount LittleFS.
 
 Mounts the image with the geometry esp_littlefs uses on the board (4096-byte
 blocks, block count taken from the image size) and checks that it holds
 exactly the files in web/dist, byte for byte. Works on images from either
-build path (mklittlefs.sh, or build/www.bin from idf.py build).
+historical image builder. The current firmware does not build or mount www.bin.
 
 Read-only: the image is never formatted or written. (littlefs-python's
 default is to format an image that fails to mount; this script does not.)

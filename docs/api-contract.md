@@ -12,8 +12,9 @@ version, add a changelog entry, get review from both sides, and update the mock.
 
 The service (`web/device_server.py`) serves the browser endpoints and static
 website, backed by an outbound-polling Board C. Its device channel is specified
-in [device API](device-api.md). Follow [S3 live test](s3-live-test.md)
-for the local demo. Board A and Board B provide networking; Board C controls
+in [device API](device-api.md). Follow [Setting Up](../README.md#setting-up)
+for the fixed-IP PC demo and [S3 live test](s3-live-test.md) for S3 bench details.
+Board A and Board B provide networking; Board C controls
 the LED. The service does not authenticate the intentionally vulnerable target
 or claim the original gateway-only security architecture.
 
@@ -92,7 +93,7 @@ Reads service and target status. Clients poll this at a fixed interval
 | `target_reachable` | The service received a valid Board C heartbeat within the previous eight seconds. |
 | `link_ok` | Device-channel availability, using the same heartbeat deadline. Does not measure the A/B SPI/UART link. |
 | `uptime_s` | Seconds since the web service started. A decrease means the service restarted. |
-| `seq` | Sequence number of the most recent event-log entry. Lets clients notice new events without fetching `/api/events`. *(See open question Q1.)* |
+| `seq` | Sequence number of the most recent event-log entry, or 0 before the first event. Lets clients notice new events without fetching `/api/events`. |
 
 `output` is the latest device-reported state; before the first heartbeat,
 its value is null and reachability is false. Heartbeats do not prove
@@ -200,17 +201,38 @@ limit. No browser REST server is part of the board firmware.
 
 ---
 
-## 4. Open questions
+## 4. Current implementation and open questions
 
-- **Q1:** Confirm what `seq` in `/api/status` means. The current proposal is
-  "seq of the newest event-log entry".
+- **Q1 (implemented):** `seq` is the newest event-log sequence number in both
+  the mock and real service. It starts at 0 and resets on service restart.
 - **Q2:** `403 not_permitted` has no trigger yet, since there is only one role.
   Keep it as reserved, or define when it applies.
-- **Q3:** Are command rate limits per session or global? The mock uses global.
+- **Q3 (implemented):** Command limits are global, shared across browser
+  sessions. The real service additionally permits only one pending command;
+  contention returns 429 with `retry_after=1`. The mock counts command attempts
+  before action/reachability checks; the real service counts admitted commands
+  after validating the action, available slot and fresh heartbeat.
 - **Q4:** Deployment-specific values for token lifetime, lockout threshold
   and duration, command rate limit, event-log capacity, and maximum body size.
   The local service currently reuses `web/mock/fixtures.json`; dedicated-server
   deployment settings remain a separate decision.
+
+Current lab defaults used by both services:
+
+| Setting | Value |
+|---|---|
+| Browser username | `operator` |
+| Session lifetime | 900 seconds |
+| Login lockout | Five consecutive failed logins trigger 60 seconds of lockout |
+| Command sliding window | 10 commands per 10 seconds, global |
+| Event log | 200 entries; default query limit 50 |
+| Request body limit | 1024 bytes |
+
+The failure that reaches the login threshold returns 401 with
+`attempts_remaining=0`; subsequent attempts during lockout return 429.
+The real service's five-second command wait and eight-second heartbeat
+deadline are separate settings in `DeviceGateway`, not fixture values. These
+are current lab service limits, not firmware-wide security guarantees.
 
 ---
 

@@ -1,0 +1,16 @@
+menu "Board identity LED"
+config GW_BOARD_RGB_LED
+    bool "Enable onboard addressable RGB LED"
+    default y if IDF_TARGET_ESP32C6
+    default n
+    help
+        C6-WROOM-1 DevKitC-1 boards use an addressable RGB LED on GPIO8.
+        Station shows blue and bridge red. This identifies the firmware
+        role, not Wi-Fi or forwarding readiness. Disable for boards without
+        this LED, or change its GPIO to match your board.
+config GW_BOARD_RGB_GPIO
+    int "Addressable RGB LED GPIO"
+    depends on GW_BOARD_RGB_LED
+    range 0 48
+    default 8
+endmenu

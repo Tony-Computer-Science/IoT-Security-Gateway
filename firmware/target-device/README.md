@@ -1,15 +1,12 @@
 # firmware/target-device: Board C
 
 ESP-IDF **6.1**, **ESP32-C6** (4 MB) or **ESP32-S3 N16R8** (16 MB).
-For S3, read [the live-test guide](../../docs/s3-live-test.md); configure the
-verified carrier LED pin and use `idf.py set-target esp32s3`.
-
-For the original C6 setup: Board C joins **IoT-Gateway** over
+Board C joins **IoT-Gateway** over
 Wi-Fi and polls the UI computer at **192.168.78.10:8000**. It uses the existing
 website's `led_on` / `led_off` commands. It needs USB power and no signal
 jumpers to station or bridge. The website/API is a separate service outside
 the boards; running it on the local computer simplifies the demo instead of
-requiring a dedicated server. Follow [S3 live-test guide](../../docs/s3-live-test.md)
+requiring a dedicated server. Follow [Setting Up](../../README.md#setting-up)
 for the full startup order and LED/network checks.
 
 This is an intentionally vulnerable lab target: its device channel is
@@ -24,7 +21,7 @@ Zachariah Grande. Any member may work here; the current owner reviews.
 ## UI computer
 
 Configure the Windows PC's fixed address and scoped firewall rule using
-the test network settings in [the live-test guide](../../docs/s3-live-test.md), then from the repository
+[client-network.md](../../docs/client-network.md), then from the repository
 root run with Python 3.9 or later:
 
 ```powershell
@@ -63,6 +60,18 @@ Under **Board C IoT device**, set:
 | Command polling interval | 500 ms by default |
 | Addressable RGB LED GPIO | 8 on the matching C6 DevKit board |
 
+For S3, use `idf.py set-target esp32s3` and configure the verified carrier LED
+GPIO; S3 defaults to -1 and deliberately refuses to build until a pin is set.
+The tested HW678 carrier uses GPIO48; that observation does not apply to every
+S3 carrier. Target-specific defaults select 16 MB flash and USB Serial/JTAG.
+See the [S3 build and bench guide](../../docs/s3-live-test.md).
+
+The UI address and port are compiled into the device firmware as
+`TARGET_UI_HOST` / `TARGET_UI_PORT`; there is no automatic server discovery.
+The PC acts as the server at that fixed endpoint for this demo. If the UI/API
+is moved to a dedicated server at another address/port, change these settings,
+rebuild and reflash Board C. The UI assets stay on the server/PC.
+
 The first build downloads pinned `espressif/cjson` 1.7.19~2. On a machine with
 limited RAM, use `IDF_PY_BUILD_JOBS=2 idf.py build`. Flash only the third
 board's port; station and bridge keep their existing firmware. Both the
@@ -79,7 +88,8 @@ on a carrier board: confirm its GPIO if using a different development board.
   on the station AP, even without an internet connection.
 - Reports its last successfully driven output and confirms commands by ID.
   The website reports success only after a matching acknowledgement. Duplicate
-  delivery does not apply the same command twice during a device boot.
+  delivery of the most recently attempted command ID does not apply it twice;
+  the board keeps only that last ID, not a history of all commands.
 - Wi-Fi/HTTP outages retain the output and retry with bounded delays. New
   device boot IDs invalidate pending commands; expired work is not queued
   for later replay. A lost confirmation can leave an unknown result, which
@@ -92,11 +102,15 @@ login renewal and LED status after each recovery. Leave station/bridge UART
 wiring as it is. This completes a local Wi-Fi application test; the gateway's
 upstream routing is tested separately.
 
-The C6 firmware build, sanitized C response-parser tests, ten real-HTTP server
-tests, and twelve Postman requests / 23 assertions passed on 2026-11-05.
+The C6 firmware build passed on 2026-11-05. Sanitized C response-parser tests,
+ten real-HTTP server tests, and twelve Postman requests / 23 assertions were
+rerun successfully on 2026-11-08; see the [software validation record](../../docs/testing.md#recorded-local-software-validation--2026-11-08).
 The HTTP tests use a protocol-level device actor, not C6 hardware. This image
-has not yet been flashed onto the third board; its radio, LED and Windows
-integration still need the acceptance steps above.
+has not yet been flashed onto the C6 third board; its radio, LED and Windows
+integration still need the acceptance steps above. The separate S3 bench
+test recorded physical on/off and heartbeat/restart recovery on 2026-11-07;
+see [that evidence](../../docs/s3-test-evidence.md). It does not establish
+acceptance of the gateway's fixed-IP Windows setup.
 
 See [device API](../../docs/device-api.md), [browser API](../../docs/api-contract.md)
 and [test commands](../../tools/test/README.md). This lab application does not

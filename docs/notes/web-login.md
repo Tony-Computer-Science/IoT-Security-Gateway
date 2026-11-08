@@ -4,6 +4,12 @@ Code: `web/src/app.js` (login view, session guard) and `web/src/api.js`
 (the HTTP call and the token). Contract: `POST /api/login` in
 `docs/api-contract.md`.
 
+The login endpoint belongs to the separate web service, hosted on a local
+computer for the demo, not to an ESP32 board. See
+[Setting Up](../../README.md#setting-up). The demo uses plain HTTP on the
+private lab network; it does not implement the original R2 encrypted-client
+connection requirement.
+
 ## The login flow, step by step
 
 1. The page always starts on the login view. There is no saved session to
@@ -16,8 +22,8 @@ Code: `web/src/app.js` (login view, session guard) and `web/src/api.js`
    the gateway.
 4. The submit button is disabled and a "Signing in" message appears using
    the `pending` state style. Disabling the button stops double submits.
-5. `api.login()` sends the username and password to `POST /api/login` over
-   the encrypted connection (R2).
+5. `api.login()` sends the username and password to the service's
+   `POST /api/login` endpoint at the same origin as the page.
 6. **Success (200):** `api.js` keeps the token in a variable. The form is
    cleared so the password is not left in the page. A timer is started from
    `expires_in`, and the view switches to Control.
@@ -46,7 +52,7 @@ the URL.
   stays on disk after the tab closes. A variable disappears when the page
   closes.
 - Reloading the page signs the user out. This is on purpose: it matches the
-  gateway, which forgets all sessions when it restarts.
+  service, which forgets all sessions when it restarts.
 - The build script (`web/scripts/build.py`) fails if the code mentions
   localStorage, sessionStorage, or document.cookie, so this cannot slip in
   by accident.

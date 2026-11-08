@@ -1,7 +1,8 @@
 # Web events view: how it works
 
 Code: the "Events view" and "Status polling" sections of `web/src/app.js`.
-Contract: `GET /api/events` in `docs/api-contract.md`.
+Contract: `GET /api/events` in `docs/api-contract.md`. The fixed-IP PC serves
+the UI and authenticated event API; no ESP32 hosts this view.
 
 ## What the log records and why
 
@@ -18,8 +19,8 @@ events, and that only signed-in users can read it. Each entry has:
 
 This is how an operator sees attacks happening, for example a run of failed
 sign-ins followed by a lockout. "Bounded" means the log has a fixed size, so
-the oldest entries drop off. An attacker therefore cannot fill the board's
-memory by generating events.
+the oldest entries drop off. Event storage is bounded in the PC service's
+memory; the log is not hosted on a board.
 
 The newest entry is shown first. Each outcome reuses a status style from the
 control view: allowed has a green ✓, denied has a red ✕, and alerts take the

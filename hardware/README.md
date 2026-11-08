@@ -1,8 +1,9 @@
 # hardware/
 
-The physical side of the gateway: the wired SPI link between Board A and Board
-B, the pinout of all three ESP32-S3-DevKitC-1 boards, and the KiCad schematic
-and PCB.
+The physical side of the gateway: the SPI or optional UART link between
+Board A and Board B, S3/C6 pinouts, Board C's RGB LED, and the KiCad schematic
+and PCB. The unfabricated Rev A PCB uses two ESP32-S3 modules. The current
+UART demo uses C6 development boards; Board C supports C6 or S3 with a verified carrier LED pin.
 
 ## Current owner (provisional)
 
@@ -18,15 +19,20 @@ Carter Cattadoris. Any member may work here; the current owner reviews.
 ## The SPI link
 
 - Signals: SCLK, MOSI, MISO, CS, plus one handshake line, plus a common ground.
-- Clock: ≤ 10 MHz.
-- This wire is the **only** path between the user-side network and the target
-  network (see [docs/architecture.md](../docs/architecture.md)). No other
-  connection between Board A and Board B (UART, shared USB hub to one host,
-  etc.) may carry data in the final setup.
+- Clock: **4 MHz by default**; up to 10 MHz only after hardware validation.
+- This link carries routed traffic between A's private AP and B's upstream
+  Wi-Fi station (see [architecture](../docs/architecture.md)). The existing
+  PCB labels describe the previous reversed Wi-Fi roles.
+- The optional [UART test mode](../docs/uart-link.md) replaces SPI with
+  crossed TX/RX and common ground. Use one configured transport at a time.
+  Each board's USB connection is for power, flashing and diagnostics.
+- Board C and the UI PC communicate locally over A's AP; their LED control
+  traffic does not traverse the A/B link.
 
-Pin assignments are recorded in [docs/README.md](docs/README.md) (set by the
-PCB, Rev A: SCLK 12, MOSI 11, MISO 13, CS 10, HS 4 on both boards). Firmware
-reads them from there.
+Pin assignments are recorded in [the wiring guide](docs/README.md). Rev A/S3
+uses SCLK 12, MOSI 11, MISO 13, CS 10 and HS 4; C6 has a separate pinout.
+Firmware defaults live in `firmware/common/gateway_link/Kconfig` and can be
+changed in menuconfig. Match those settings to the actual wiring on both ends.
 
 ## Opening the KiCad project
 

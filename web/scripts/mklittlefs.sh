@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Pack web/dist/ into a LittleFS image for Board A's "www" partition, using the
-# standalone mklittlefs tool. (The ESP-IDF build can make the same image
-# itself; see web/scripts/README.md, "Two ways to build the image".)
+# Legacy asset packer from the former onboard-hosting design.
+# The fixed-IP PC serves the UI/API; this image is unused by that service.
 #
 # Usage:  web/scripts/mklittlefs.sh [output.bin]      default: web/littlefs.bin
 #
@@ -62,7 +61,7 @@ if [ ! -d "$DIST_DIR" ] || [ -z "$(ls -A "$DIST_DIR")" ]; then
   exit 1
 fi
 
-# Only the gzipped assets belong on the board. `build.py --keep-min` leaves
+# Only gzipped assets belong in this legacy image. `build.py --keep-min` leaves
 # uncompressed copies in dist/ for debugging; refuse to pack those.
 EXTRA="$(find "$DIST_DIR" -type f ! -name '*.gz' | sed "s|^$DIST_DIR/||")"
 if [ -n "$EXTRA" ]; then
@@ -99,4 +98,4 @@ mklittlefs -c "$DIST_DIR" -s "$SIZE_BYTES" -b "$BLOCK_SIZE" -p "$PAGE_SIZE" "$OU
 
 echo "Wrote $(wc -c < "$OUTPUT" | tr -d ' ') bytes."
 echo "Check it:  python3 web/scripts/verify_littlefs.py $OUTPUT"
-echo "Flash it:  see web/scripts/README.md, \"Flashing the image\""
+echo "Legacy image only; the current UI runs on the fixed-IP PC and needs no asset flashing."

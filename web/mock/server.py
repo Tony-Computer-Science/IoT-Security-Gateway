@@ -44,7 +44,7 @@ CONTENT_TYPES = {
     ".ico": "image/x-icon",
 }
 
-# Same policy the firmware should send: everything from our own origin only.
+# Shared by the mock and real PC web service: same-origin resources only.
 # Catches accidental external requests (CDNs, fonts) during development.
 CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self'; "

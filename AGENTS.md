@@ -5,8 +5,9 @@ Read `CONTRIBUTING.md` for branch naming, validation and required owner reviews.
 Use topic branches and PRs; merge only after the required reviews and checks.
 
 For the real-device UI and S3 test, read `docs/s3-live-test.md` before building
-or flashing. This branch combines main's frontend with the target/backend from
-`codex/spi-wifi-router`; it does not import the A/B router implementation.
+or flashing. The repository combines the A/B SPI/UART router, the polling
+target/backend and main's login/control/events frontend with S3/C6 target support.
+The UI/API runs on the fixed-IP PC at 192.168.78.10:8000, never on an ESP32.
 Preserve the existing login/control/events behavior. The browser uses plain
 JavaScript and a Python asset build, with no runtime framework or dependencies.
 Keep Wi-Fi credentials, sdkconfig, firmware containing credentials and full-flash

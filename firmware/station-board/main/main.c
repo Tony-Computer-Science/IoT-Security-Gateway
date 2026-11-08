@@ -1,18 +1,42 @@
-// BOARD A (station board): HTTPS gateway, authentication, policy, event log, SPI controller
-//
-// Scaffold only: boots and logs a banner. No features are started here yet.
-
-#include "esp_idf_version.h"
+#include "sdkconfig.h"
+#include "esp_event.h"
 #include "esp_log.h"
-#include "esp_system.h"
+#include "nvs_flash.h"
+#include "gateway_link.h"
+#include "access_point.h"
+#include "station_router.h"
+#include "board_led.h"
+#include "gateway_diagnostics.h"
 
-static const char *TAG = "station_board";
+#ifndef CONFIG_GW_SPI_CONTROLLER
+#error "Board A requires the host endpoint; enable GW_SPI_CONTROLLER"
+#endif
+#if !CONFIG_LWIP_IP_FORWARD || !CONFIG_LWIP_IPV4_NAPT
+#error "Board A requires IPv4 forwarding and NAPT"
+#endif
+#if CONFIG_LWIP_IPV6 || CONFIG_LWIP_IPV4_NAPT_PORTMAP
+#error "IPv6 and inbound port mapping are outside this router configuration"
+#endif
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "========================================");
-    ESP_LOGI(TAG, " IoT Security Gateway: BOARD A (station board)");
-    ESP_LOGI(TAG, " HTTPS gateway, authentication, policy, event log, SPI controller");
-    ESP_LOGI(TAG, " ESP-IDF %s", esp_get_idf_version());
-    ESP_LOGI(TAG, "========================================");
+    esp_err_t led_error = board_led_show_role(true);
+    if (led_error != ESP_OK)
+    {
+        ESP_LOGW("station", "Identity LED unavailable: %s", esp_err_to_name(led_error));
+    }
+    /* Stop on NVS failure; never erase stored data silently. */
+    ESP_ERROR_CHECK(nvs_flash_init());
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    ESP_ERROR_CHECK(gateway_link_init());
+    ESP_ERROR_CHECK(esp_netif_set_default_netif(gateway_link_netif()));
+    esp_err_t error = access_point_start();
+    if (error != ESP_OK)
+    {
+        ESP_LOGE("station", "AP unavailable: %s; configure it in menuconfig",
+                 esp_err_to_name(error));
+    }
+    ESP_ERROR_CHECK(station_router_start());
+    gateway_diagnostics_start(true);
 }

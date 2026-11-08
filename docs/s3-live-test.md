@@ -1,11 +1,16 @@
 # ESP32-S3 live device test
 
-This test connects the existing login, control and events pages to a real
-outbound-polling target. It combines the frontend from main at `d8046bb` with
-Board C and the Python device service from `codex/spi-wifi-router` at `653a152`.
-It does not include that branch's A/B router firmware. A working test here
-establishes browser/service/target integration, not gateway isolation or the
-A/B wired link.
+This test connects the login, control and events pages to a real outbound-
+polling target. The repository includes both S3/C6 target support and the
+A/B SPI/UART router. The original S3 bench test combined main's frontend at
+`d8046bb` with the router branch's device/backend at `653a152`; that bench
+result established browser/service/target integration, not A/B isolation.
+
+The current gateway demo uses the PC as the server at the fixed address
+**192.168.78.10:8000** on IoT-Gateway. No ESP32 serves the UI/API. Configure
+that PC using [client-network.md](client-network.md), then follow the root
+[Setting Up guide](../README.md#setting-up). The target's server address/port
+are compiled in through menuconfig; there is no automatic service discovery.
 
 ## Requirements
 
@@ -23,15 +28,16 @@ A/B wired link.
 From the repository root:
 
 ```sh
-python3 web/device_server.py --host <SERVICE_LAN_IP> --port 8000 --device-id iot-s3
+python3 web/device_server.py --host 192.168.78.10 --port 8000 --device-id iot-s3
 ```
 
-Open `http://<SERVICE_LAN_IP>:8000/`. Sign in as `operator` with the randomly
+Open `http://192.168.78.10:8000/`. Set the target device ID to `iot-s3`
+to match this command (the default `iot-c6` also works if both sides match). Sign in as `operator` with the randomly
 generated password printed by the process. `UI_PASSWORD` can supply a private
 local password. Only bind to the intended test interface. The mock server is
 still available for offline development, but does not control an ESP.
 
-For development on a remote machine, bind the service to `127.0.0.1:8765`
+For the historical remote-development bench arrangement only, bind the service to `127.0.0.1:8765`
 and forward it from the computer connected to the ESP's Wi-Fi:
 
 ```sh

@@ -337,11 +337,10 @@ function formatSeconds(s) {
 // NO OPTIMISTIC UPDATES (R6, R7). The displayed LED state changes only when a
 // gateway response reports the target's actual state: a 200 from
 // POST /api/command, or GET /api/status. Clicking a button never changes it.
-// If the display flipped on click, a command that then failed (link down,
-// target unreachable, rate limited, timeout) would look like it had worked:
-// the user would see "On" while the real LED is still off. R7 forbids a
-// failure ever appearing as a successful action, and R6 says a rejected
-// request leaves the target unchanged, so the display must stay unchanged too.
+// Admission failures leave the target unchanged. A lost reply or missing
+// device acknowledgement can leave an unknown physical result. Keep the
+// last reported output until another report arrives; never infer success
+// or automatically retry from an ambiguous response.
 
 const LINK_DOWN_TEXT =
   'Board-to-board link is down: the station board and the bridge board cannot talk over the UART wire. Commands are disabled.';

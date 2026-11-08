@@ -1,11 +1,15 @@
 # web/mock: mock gateway API
 
-A development stand-in for Board A. It implements every endpoint in
-[docs/api-contract.md](../../docs/api-contract.md) (v0.1.0) with real behavior,
+A development stand-in for the separate web service and its IoT target.
+It implements every endpoint in
+[docs/api-contract.md](../../docs/api-contract.md) (v0.3.2) with real behavior,
 and serves `web/src` from the **same port**, so there is no CORS. Python 3
 standard library only.
 
 **Mock only.** The `/__mock/*` endpoints must never exist in firmware.
+For the physical third C6, run [the device service](../README.md#control-the-third-c6)
+instead. This mock simulates successful LED changes; it does not model the
+real device service's 504 acknowledgement failures.
 
 ## Current owner (provisional)
 
@@ -33,8 +37,10 @@ MOCK_PASSWORD='dev-only-pass' python3 web/mock/server.py
 
 ## Simulated behavior
 
-Values come from [fixtures.json](fixtures.json). They are **not** the firmware's
-limits (see contract open question Q4).
+Values come from [fixtures.json](fixtures.json). The real PC service reuses
+the login/session, rate-limit, event-log and body-size settings, but derives
+reachability/output from Board C rather than `initial_state`. These are
+**not** firmware-wide limits (see contract open question Q4).
 
 | Behavior | Mock value |
 |---|---|
@@ -44,6 +50,11 @@ limits (see contract open question Q4).
 | Event log | ring buffer, `event_log_capacity` = 200 entries |
 | Max request body | `max_body_bytes` = 1024 → 413 |
 | Unknown `/api/` path / wrong method | 404 / 405 |
+
+The fifth consecutive failed login returns 401 with `attempts_remaining=0`
+and starts lockout; subsequent attempts during lockout return 429. The mock
+counts command attempts before checking their action/reachability; the real
+service counts admitted commands and additionally limits pending work to one.
 
 ## Using the API with curl
 

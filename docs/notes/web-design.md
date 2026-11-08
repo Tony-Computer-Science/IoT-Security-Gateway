@@ -23,8 +23,8 @@ start in a theme nobody tested.
 Six base colours: case grey, an off-white faceplate, near-black ink, dark
 grey labels, mid grey wires, and one blue used only for the keyboard focus
 ring, so blue never suggests a status. Dark mode swaps the same six roles.
-Fonts are the computer's own, since the page runs offline from the board's
-flash; character comes from size and weight, with labels in small spaced
+Fonts are the computer's own, since the page runs from the local PC server
+without external font requests; character comes from size and weight, with labels in small spaced
 capitals like instrument panel printing.
 
 ## Hierarchy on the control view
@@ -80,4 +80,9 @@ update fails, values stay with a HOLD tag, like a multimeter's frozen reading.
 - Motion only confirms a user action (key travel, pending pulse) and stops
   under reduced motion. Every control has a thick keyboard focus ring.
 
-The whole interface is 11.8 KB gzipped, under a fifth of its 60 KB budget.
+Run `python3 web/scripts/build.py` for the current gzipped size and 60 KiB
+budget check. The UI runs on the fixed-IP PC, not in ESP32 flash.
+
+In live-device mode, the diagram reads API service, Wi-Fi, target. Its device
+channel is measured by HTTP heartbeat; it does not measure the A/B link or
+prove gateway isolation. The B/A/C labels describe the mock topology only.

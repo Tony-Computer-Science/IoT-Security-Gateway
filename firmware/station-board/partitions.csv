@@ -3,13 +3,13 @@
 # Offsets are intentionally left blank: ESP-IDF computes them, aligning app
 # partitions to 64 KB. Do not hardcode offsets unless there is a reason.
 #
-# TODO(station-board): sizes are provisional placeholders. Confirm them once
-#   the HTTPS + Wi-Fi app size is known and the flash size is confirmed
-#   (see sdkconfig.defaults). The total currently needs a 4 MB flash.
+# Sizes reserve space for the gateway Wi-Fi/router application and an unused
+# legacy asset partition. The total fits a 4 MB flash (see sdkconfig.defaults).
 # TODO(station-board): decide whether OTA slots are needed.
 #
-# "www" holds the gzipped web assets from web/dist (see web/scripts/mklittlefs.sh,
-# which reads the size from this file). The littlefs subtype needs ESP-IDF v5.x.
+# "www" is retained from the former onboard-hosting design, unmounted and unused.
+# The UI/API runs on a separate server (the fixed-IP PC in the demo).
+# The legacy web/scripts/mklittlefs.sh reads this size only for historical use.
 #
 # Name,    Type, SubType,  Offset, Size,   Flags
 nvs,       data, nvs,      ,       0x6000,

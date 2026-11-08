@@ -1,5 +1,11 @@
-# ESP-IDF v5.x project: BOARD A (station board)
 cmake_minimum_required(VERSION 3.16)
-
+set(EXTRA_COMPONENT_DIRS "../common")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(station_board)
+if(NOT IDF_TARGET STREQUAL "esp32s3" AND NOT IDF_TARGET STREQUAL "esp32c6")
+    message(FATAL_ERROR "Gateway firmware supports ESP32-S3 and ESP32-C6")
+endif()
+# Validate AP ingress before NAPT and gate forwarding independently of NAT.
+idf_component_get_property(lwip_lib lwip COMPONENT_LIB)
+target_include_directories(${lwip_lib} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/components/station_router/include")
+target_compile_definitions(${lwip_lib} PRIVATE ESP_IDF_LWIP_HOOK_FILENAME="station_lwip_hooks.h")

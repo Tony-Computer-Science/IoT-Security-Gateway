@@ -1,12 +1,11 @@
 # web/: browser interface
 
-For the real ESP target, use `web/device_server.py`, not the mock. See
-[the S3 live-test guide](../docs/s3-live-test.md). This branch retains main's
-implemented login/control/events views and integrates the hardware backend.
-
-The single-page web interface that Board A (station board) serves over HTTPS
-from a LittleFS partition. It talks to Board A only through the REST API in
-[docs/api-contract.md](../docs/api-contract.md).
+The single-page web interface and REST API are hosted by a **separate service
+outside the ESP32 boards**. For simplicity, the demo runs that service on a
+local computer at 192.168.78.10:8000 instead of a dedicated server. Board C
+initiates requests to it over Wi-Fi. See the root
+[Setting Up guide](../README.md#setting-up) and
+[browser API contract](../docs/api-contract.md).
 
 ## Current owner (provisional)
 
@@ -18,12 +17,14 @@ Lalit Dhakal. Any member may work here; the current owner reviews (see
 | Path | Purpose |
 |---|---|
 | `src/index.html` | Semantic shells for the three views: login, control, events |
-| `src/style.css` | Design tokens and the six state styles |
-| `src/app.js` | Bootstrap, view registry, show/hide switching, status polling loop |
+| `src/style.css` | Design tokens, theme and the six state styles |
+| `src/app.js` | Login/control/events views, shared polling, live monitoring and theme toggle |
 | `src/api.js` | One function per endpoint; bearer token, JSON, error mapping. No DOM access. |
-| `mock/` | Python mock of Board A's API with failure injection, see [mock/README.md](mock/README.md) |
+| `device_server.py` | PC UI/API service with outbound device polling and command acknowledgements |
+| `mock/` | Simulated service/device behavior for UI development, see [mock/README.md](mock/README.md) |
 | `scripts/build.py` | Minify, gzip, size report, 60 KB budget check |
-| `scripts/mklittlefs.sh` | Pack `dist/` into a LittleFS image for the `www` partition |
+| `scripts/mklittlefs.sh` | Legacy asset packer from the former onboard-hosting design; unused by the service |
+| `scripts/verify_littlefs.py` | Optional legacy image verifier; not required for PC hosting |
 | `dist/` | Build output. **Git-ignored.** Created by `build.py`. |
 
 The build scripts live in `scripts/`, not `build/`. ESP-IDF's ignore pattern
@@ -39,27 +40,64 @@ python3 web/mock/server.py          # then open the printed URL
 The mock serves `web/src` and the API from one origin, so there is no CORS
 and no build step during development. Edit a file and reload.
 
+## Control the third C6
+
+Configure the Windows UI PC as **192.168.78.10/24** on IoT-Gateway using
+[these steps](../docs/client-network.md), including the scoped TCP 8000
+firewall rule. With Python 3.9 or later, run from the repository root:
+
+```powershell
+python web/device_server.py --host 192.168.78.10 --port 8000
+```
+
+Open `http://192.168.78.10:8000/`. Sign in as `operator` with the login
+password printed by the service, or set `UI_PASSWORD` in the environment
+before launch to choose one. No package installation or web build is needed.
+This password is separate from the Wi-Fi passphrase.
+
+Service options are `--host` (default `192.168.78.10`), `--port` (default
+`8000`), `--device-id` (default `iot-c6`) and `--quiet` (suppress request logs).
+Match the address, port and device ID in Board C's menuconfig. When
+`UI_PASSWORD` is set, startup prints `(from UI_PASSWORD)` instead of the
+password; sign in with the value you configured.
+
+Build and flash [Board C](../firmware/target-device/README.md) with the station
+AP credentials and the same PC address/port. Its Wi-Fi requests carry state
+reports and receive `led_on` / `led_off` commands. The PC returns browser
+success only after a matching device acknowledgement. Unconfirmed delivered
+commands return 504; acknowledged driver failures return 502 `command_failed`
+with the latest device-reported output. The UI keeps reported output and reconciles
+later reports instead of retrying automatically. Heartbeats expire after
+eight seconds. A command waits up to five seconds, with one command in flight.
+The service reserves worker capacity for device polls; excess browser/API
+requests return 503 `server_busy` with a retry hint.
+
+One IoT target is supported. The PC service disables all `/__mock/` routes.
+Its device channel is intentionally unauthenticated plain HTTP on the lab
+AP; it does not implement TLS or device identity verification. See the
+[device wire contract](../docs/device-api.md) and [automated checks](../tools/test/README.md).
+
 ## Build
 
 ```sh
 python3 web/scripts/build.py        # -> web/dist/*.gz, prints size report
-web/scripts/mklittlefs.sh           # -> web/littlefs.bin (needs mklittlefs)
 ```
 
 `build.py` exits non-zero if the gzipped total is over **60 KB**, or if the
 minified output uses `localStorage`, `sessionStorage`, `document.cookie`,
 `WebSocket`, or an external `http(s)://` URL.
 
-Board A should serve `/<file>` by reading `/<file>.gz` from LittleFS with
-`Content-Encoding: gzip` and the right `Content-Type`. It should also send the
-same `Content-Security-Policy` as the mock server (see `CSP` in
-`mock/server.py`).
+The current PC service serves `web/src/` directly; these generated assets
+are not needed for the setup procedure. The LittleFS packer is retained as
+legacy tooling and does not imply a plan to host the website on a board.
+The real service and mock send the same `Content-Security-Policy` (see `CSP`
+in `mock/server.py`).
 
 ## Constraints (absolute)
 
-These come from running on an ESP32-S3 whose flash and RAM are shared with
-mbedTLS and the event log. Don't work around them. If one seems wrong, raise
-it with the team.
+These lightweight frontend constraints are retained from the earlier design.
+They apply to the web assets even though hosting now belongs to the separate
+service, with no ESP32 flash or LittleFS deployment step.
 
 - **No framework or library** (React, Vue, Svelte, jQuery, Alpine, htmx, …).
 - **No bundler** (Vite, webpack, Rollup, esbuild, Parcel).
@@ -89,7 +127,21 @@ so no state relies on color alone:
 | `target-unreachable` | ⚠ | dotted | 502 |
 | `link-down` | ⨯ | double left bar, striped | 503 |
 
-## What is stubbed
+In the real service, heartbeat expiry sets both availability fields false
+and uses the channel-unavailable style; it does not report A/B link health.
+A delivered command without confirmation returns 504 and an unknown-result
+message; the UI preserves the last reported output until a fresh report arrives.
 
-The login, control, events and polling views are implemented. Live-device mode
-uses heartbeat/service labels; the mock retains its simulated board-link view.
+## Current behavior and remaining acceptance
+
+Login, confirmed LED control, event filtering and live device monitoring are
+implemented. One poll loop refreshes the active Control or Events view. Live
+status uses device HTTP heartbeats, reports Unknown before first contact,
+and shows ESP uptime separately from service uptime and historical command
+confirmation. Failed status refreshes disable commands until status recovers.
+The theme toggle is in memory; each page load starts in light mode.
+
+The [S3 bench evidence](../docs/s3-test-evidence.md) records physical on/off
+and restart/heartbeat recovery. C6 and Windows fixed-IP integration still need
+an end-to-end test. The website/API belongs to the separate PC service;
+the boards provide networking and the IoT output.

@@ -1,12 +1,20 @@
 # Board C to PC device API
 
-**Version 0.1.0.** One ESP32-C6-WROOM-1 target joins IoT-Gateway and initiates
+**Version 0.1.0.** One ESP32-C6 or ESP32-S3 target joins IoT-Gateway and initiates
 HTTP requests to **192.168.78.10:8000**. The website and authenticated browser
 API are a separate service external to the boards. For simplicity, the demo
 runs this service on a local computer instead of a dedicated server. The PC
 serves both from the same origin. It never opens a
 connection to Board C. This adds no port forwarding through station/bridge.
-See [S3 live test](s3-live-test.md) for startup order and LED checks.
+See [Setting Up](../README.md#setting-up) for startup order and LED checks.
+
+The demo PC acts as the server at a manually assigned fixed address. Board C
+has this address and port compiled into its firmware from `TARGET_UI_HOST`
+and `TARGET_UI_PORT` in menuconfig (defaults **192.168.78.10** / **8000**).
+There is no automatic server discovery. Moving the service to a dedicated
+server with a different endpoint requires rebuilding and flashing Board C
+with matching settings. The website and APIs remain on the server, never
+on an ESP32.
 
 Board C remains an intentionally vulnerable **lab-only plain-HTTP device**:
 this channel has no device authentication or TLS. Its public device ID is
@@ -37,7 +45,8 @@ Request, with exactly these fields:
   `--device-id` (default `iot-c6`). One target is supported by this UI contract.
 - `boot_id`: fresh random 16-character lowercase hex value each device boot.
 - `output`: `on` or `off`, the last successfully driven LED state. Boot starts
-  off. On is green on the GPIO8 addressable RGB LED.
+  off. On is green on the configured addressable RGB LED (GPIO8 on the matching
+  C6 carrier; S3 requires a verified carrier GPIO).
 - `ack_id`: last attempted command ID, 32 lowercase hex characters, or null
   before any command. Repeated acknowledgements are safe.
 - `ack_ok`: true for a successful driver operation; false on driver failure.
@@ -77,9 +86,11 @@ observed when it was admitted. Changing boot ID invalidates old pending work.
 There is no persistent replay queue after either side restarts.
 
 While a command is pending, polls return the same command ID until confirmed
-or timed out. The device applies each ID at most once within its current boot
-and includes that ID/result in subsequent polls, including after a lost ACK
-response. The PC confirms only the matching delivered ID on the matching boot,
+or timed out. The device remembers its **most recently attempted ID** and
+does not reapply consecutive deliveries of that ID, including after a lost
+ACK response. It reports that ID/result in subsequent polls. There is no
+history of earlier IDs or persistent deduplication across boots. The PC
+confirms only the matching delivered ID on the matching boot,
 with ack_ok=true and the requested output. Mere command delivery is not success.
 
 The browser command waits up to five seconds. If never delivered, it returns
@@ -97,7 +108,7 @@ frontend treats this as device reachability, not proof of internet access.
 ## Running the PC service
 
 On the Windows UI computer, configure the fixed address from
-[client-network setup](s3-live-test.md), then from the repository root run:
+[client-network setup](client-network.md), then from the repository root run:
 
 ```powershell
 python web/device_server.py --host 192.168.78.10 --port 8000
@@ -118,3 +129,5 @@ LED or the Windows PC. Deploying the third board needs the matching ESP-IDF
 
 - 0.1.0: Initial outbound poll, bounded command confirmation, restart and
   acknowledgement behavior for the real Board C lab target.
+- Documentation clarified on 2026-11-08: deduplication retains only the most
+  recently attempted command ID. No API or wire behavior changed.

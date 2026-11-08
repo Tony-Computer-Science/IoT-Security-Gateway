@@ -1,98 +1,133 @@
-# Architecture
+# Architecture: IPv4 router milestone
 
-## Topology
-
-```
-  [legitimate users and attackers on the normal Wi-Fi network]
-            |  HTTPS, port 443, the only exposed service
-  +---------+------------------------------+
-  | BOARD A  "station board"               |  joins existing Wi-Fi
-  |   HTTPS server, authentication,        |  SPI controller
-  |   command allow-list, rate limiting,   |
-  |   event log, and the WEB INTERFACE     |
-  +---------+------------------------------+
-            |  wired SPI link: SCLK, MOSI, MISO, CS, plus a handshake
-            |  line, <= 10 MHz. THIS IS THE ONLY PATH between the
-            |  two networks. No IP forwarding, no bridging, no NAT.
-  +---------+------------------------------+
-  | BOARD B  "bridge board"                |  hosts a private Wi-Fi AP
-  |   SPI peripheral, frame validation,    |  SPI peripheral
-  |   fixed-target HTTP client             |
-  +---------+------------------------------+
-            |  private Wi-Fi, password withheld from ordinary users
-  +---------+------------------------------+
-  | BOARD C  "target device"               |  deliberately insecure
-  |   hardcoded credentials, no auth,      |
-  |   plain HTTP, controls an LED          |
-  +----------------------------------------+
+```text
+Client devices
+    | WPA2 personal Wi-Fi (AES/CCMP)
+Board A: private AP, client DHCP, NAT onto its SPI address
+    | SPI2: SCLK/MOSI/MISO/CS/HS, no additional network connection
+Board B: virtual Ethernet -> IPv4 NAPT -> personal Wi-Fi station
+    | existing Wi-Fi router
+Upstream LAN / internet
 ```
 
-All three boards are ESP32-S3-DevKitC-1.
+Repository names remain station-board=A and bridge-board=B, but their current
+Wi-Fi roles are now A=AP and B=station. Production A provides AP/DHCP/NAT.
+The separate spi-test-host image stands in for A with its Wi-Fi radio disabled.
+The website/API is a separate service external to the ESP32 boards. For
+simplicity, the demo hosts it on a local computer instead of a dedicated
+server. Board C joins A's AP as a Wi-Fi client and polls that computer at
+192.168.78.10:8000. The service serves the browser API and confirms LED
+commands using device acknowledgements. This application traffic stays on
+the AP; it does not pass through the A/B transport or require outside access.
+The intentionally unauthenticated device channel is documented in
+[device-api.md](device-api.md). Browser login authenticates operators to the
+PC service; it does not authenticate C or implement per-client network policy.
+The service PC is inside the protected AP in this demo; "external service"
+describes a process outside the boards, not unsolicited access from the
+upstream LAN. No website/API hosting on a board is required or planned for
+this setup. See the root [Setting Up guide](../README.md#setting-up).
 
-## Security argument
+## UI hosting and fixed server endpoint
 
-Each board has its own radio, and the boards share no network stack. So no
-software path on a single device can carry a request from the user network to
-the target. A request must be **authorized on Board A** and then **re-issued
-across the wire by Board B**.
+The UI and browser/device APIs belong to a server process. A local PC acts
+as that server in the demo because no dedicated server is provisioned:
 
-Board B never forwards raw packets or arbitrary URLs. It accepts only
-well-formed SPI frames that encode an allow-listed operation. It then performs
-that operation against one **fixed** target address that is compiled into its
-firmware (R3: clients cannot choose a destination).
-
-## Trust zones
-
-| Zone | Contents | Trust | Boundary control |
-|---|---|---|---|
-| **U** user network | Users' browsers, attackers, everything else on the normal Wi-Fi | Untrusted | TLS, authentication, allow-list, rate limits on Board A |
-| **A** station board | HTTPS server, sessions, policy, event log, SPI controller | Trusted, internet-facing | The only service exposed to U is HTTPS on port 443 |
-| **L** SPI link | Physical wires between A and B | Trusted by physical control | Fixed frame format, length and type validation on both ends |
-| **B** bridge board | SPI peripheral, private AP, fixed-target HTTP client | Trusted, not reachable from U | No IP route to U; accepts only valid frames |
-| **T** target network | Board C on Board B's private AP | Untrusted device in an isolated network | AP password withheld; C never joins U (R1) |
-
-## Request flow: `POST /api/command {"action":"led_on"}`
-
-```mermaid
-sequenceDiagram
-    participant U as Browser (zone U)
-    participant A as Board A
-    participant B as Board B
-    participant C as Board C
-    U->>A: HTTPS POST /api/command + Bearer token
-    A->>A: auth: validate session (R2)
-    A->>A: policy: rate limit (R4), allow-list + validate (R3)
-    A->>A: link ready? else 503 link_down (R7)
-    A->>B: SPI frame: SET_OUTPUT on
-    B->>B: validate frame (R3)
-    B->>C: HTTP request to fixed target address
-    C-->>B: HTTP response
-    B-->>A: SPI frame: result / target_unreachable
-    A->>A: eventlog: record outcome (R5)
-    A-->>U: 200 {result, output} or 502 / 503
+```text
+Browser on PC/phone -> http://192.168.78.10:8000/ -> PC web service
+Board C            -> http://192.168.78.10:8000/device/poll -> same service
 ```
 
-Every step that can fail ends the request with an error response from
-[api-contract.md](api-contract.md), and the target is left unchanged (R6).
+The PC is manually assigned **192.168.78.10/24** on A's AP; A excludes .10
+from its DHCP pool but does not assign it to the PC automatically. Board C's
+`TARGET_UI_HOST` and `TARGET_UI_PORT` settings default to **192.168.78.10**
+and **8000** and are compiled into its firmware. This is a fixed configured
+endpoint, not service discovery. A future dedicated server must be reachable
+at the device's configured address/port; changing that endpoint requires
+rebuilding and flashing Board C. The browser uses relative `/api/` URLs
+against whichever server served the page. None of the ESP32 images serves
+the UI or browser API.
 
-## Failure and restart behavior (R7)
+## Gateway link transport
 
-| Event | Required behavior |
+For tests with two signal wires plus common ground, both endpoints can select
+[UART test mode](uart-link.md) instead of SPI. It carries the same Ethernet
+frames, status and sessions with a serial envelope. Routing and subnet rules
+below are unchanged; existing SPI names also refer to this virtual interface
+when UART is selected. The SPI path remains the production PCB default.
+
+## Addressing and data path
+
+SPI uses static B=192.168.77.1, A=192.168.77.2, mask=255.255.255.252.
+Both images expose these settings in menuconfig and require a usable /30 pair.
+B rejects upstream subnet overlap. A defaults to 192.168.78.1/24, supplies DHCP
+leases .100-.199 and requires a private .1/24 distinct from SPI and upstream.
+A NATs its clients onto its SPI address.
+This intentionally uses NAT on each board and requires no upstream static route.
+Only B obtains an upstream address using DHCP. DNS addresses travel in SPI
+STATUS; the test host installs them into its resolver and production A advertises
+them to clients through DHCP. No DHCP runs over SPI. A keeps its AP/DHCP active
+through ordinary upstream outages. On a DNS address change, it restarts DHCP and
+briefly reassociates clients so they obtain current options; before first upstream
+readiness DNS offering is disabled, though IDF 6.1 may advertise the AP
+gateway as its DHCP DNS fallback. No local DNS proxy or public fallback is
+used. A missing backup repeats the learned primary in the SDK DNS slots,
+since its public API rejects clearing a slot with 0.0.0.0.
+
+Ethernet frames are copied through bounded eight-packet queues/pools. The
+shared codec handles wire framing independently of ESP-IDF. The shared link
+component attaches to ESP-NETIF's Ethernet stack. B enables NAPT on the SPI
+netif and sets the upstream Wi-Fi netif as its default route. Ordinary
+outbound IPv4 TCP, UDP and ICMP are supported. HTTPS remains end-to-end.
+
+## Failure boundaries
+
+- Data is gated on an agreed SPI session and upstream IPv4 readiness without
+  subnet overlap. An IP lease is not an internet reachability assertion.
+- Timeout (2 seconds), peer restart, uplink loss or address change closes the
+  gate, invalidates session state and discards queued traffic. NAT is cleared
+  before reopening. Control/status remains available while offline.
+- NAT is enabled before opening the data gate. It is disabled while the netif
+  is still up, before taking the netif down. lwIP forwarding hooks also check
+  readiness so already queued packets cannot bypass a closed gate.
+- The ingress hook rejects direct upstream destinations in the SPI subnet;
+  adding an upstream static route cannot bypass NAT. Port mapping is disabled.
+  Only traffic matching an outbound NAT mapping reaches the downstream host.
+- SPI IPv4 source addresses must equal A's configured SPI address. Malformed
+  L3/L4 input, IPv6, VLAN and unknown EtherTypes are dropped. Counters are
+  available through STATUS; logs omit credentials and packet contents.
+- The SDK's NAPT path parses transport headers before IP reassembly, so this
+  milestone drops IPv4 fragments before that path. TCP uses MTU 1500/MSS 1460;
+  oversized fragmented UDP is unsupported. ICMP echo works; this is not a
+  general-purpose ICMP error/ALG implementation. ESP-IDF NAPT creates outbound
+  TCP/UDP mappings for source ports >=1024, as used by ordinary client sockets.
+- SPI is trusted by physical control. CRC detects corruption, not malicious
+  peers. A enforces WPA2/AES admission and basic IPv4 source/subnet policy;
+  application authorization and per-device policy remain future work. This
+  does not implement Wi-Fi client isolation.
+
+## Original graded requirements
+
+[requirements.md](requirements.md) is preserved as the original specification,
+not rewritten to make the new router appear compliant.
+
+| Original requirement | Router milestone consequence |
 |---|---|
-| Board A boots | No sessions exist. Commands return 503 until the SPI link reports ready. |
-| Board B boots or resets | The link reports not ready. Board A returns 503 for commands. In-flight requests are discarded, not replayed. |
-| SPI link broken | Same as Board B down. No fallback path to the target exists. |
-| Target unreachable | Board A returns 502. The event log records a `target` / `alert` entry. |
-| Board A loses user Wi-Fi | No users can connect. Nothing changes for the target. |
+| R1 controlled target entry | Topology and traffic direction changed; target-command isolation is not implemented here. |
+| R2 credential before commands | Uplink/AP credentials are protected from source/log disclosure and A requires WPA2 admission; application command authentication is not part of this router. |
+| R3 status/output allow-list, fixed destination | Intentionally incompatible: clients choose ordinary IPv4 destinations. |
+| R4 configurable request limits | Packet queues are bounded; the PC service reuses browser login/command limits and allows one pending target command. These are separate from router policy. |
+| R5 bounded authorized event log | The PC service exposes an authenticated bounded application log through the implemented events view. Router link counters and serial diagnostics are separate. |
+| R6 normal target output control | C6/S3 LED control and PC command confirmation are implemented. S3 bench acceptance is recorded separately; C6 fixed-IP PC integration remains pending. |
+| R7 restart handling | Session invalidation and closed data paths are implemented; C6 UART peer-restart checks passed. SPI/full hardware acceptance remains pending. Local Board C control does not require the A/B link. |
 
-The details of link readiness and request invalidation are defined in
-[spi-protocol.md](spi-protocol.md) (TODO).
+The [SPI 0.2.0 contract](spi-protocol.md) supersedes the draft command protocol.
+The [REST API 0.3.2](api-contract.md) is served by the PC, not A or B, and
+documents unknown command results when a delivered command lacks confirmation.
+PCB signal routing remains valid, but its A-uplink/B-IoT-AP labels reflect the
+old architecture and must be revised before fabrication.
 
-## Web interface delivery
-
-Board A serves the web interface from a LittleFS partition (see
-`firmware/station-board/partitions.csv`). The assets are pre-minified and
-gzipped by `web/scripts/build.py` and must stay within a 60 KB gzipped budget,
-because flash and RAM are shared with mbedTLS buffers and the event log. The
-page polls `GET /api/status` (default every 2000 ms) instead of using a
-WebSocket, which would cost an extra socket and TLS context.
+A fixed UI host address (.10 in the default AP /24) is excluded from the DHCP
+pool. Station supports four simultaneous clients by default; associated
+clients can communicate locally with the UI PC. Both pre-NAT filters reject
+new TCP SYN packets arriving from outside while allowing normal replies.
+See [client addressing and outbound-only routing](client-network.md).
