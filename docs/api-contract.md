@@ -1,6 +1,6 @@
 # REST API contract
 
-**Version: 0.3.0**
+**Version: 0.3.1**
 
 This is the interface between the web interface (`web/`) and the **separate
 web service**, hosted outside the ESP32 boards. For simplicity, the demo runs
@@ -101,6 +101,21 @@ bridge/internet access is down but the AP and service computer are reachable.
 The standalone mock can inject `link_ok` and `target_reachable` independently;
 its original A/B-link simulation does not describe the real service's path.
 
+Live-device responses also include `status_source: "device_http"`, `last_seen_s`
+(seconds since the latest report, or null) and `device_uptime_s` (uptime at that
+report, or null). Device uptime is not extrapolated when reports stop.
+
+Both the real service and mock include `last_confirmed_command`: null until a
+command succeeds, otherwise `{ "action": "led_on" | "led_off", "output": "on" |
+"off", "service_uptime_s": number }`. The timestamp is the service's uptime
+when it accepted the successful command confirmation, not a wall-clock time.
+Only a matching successful acknowledgement creates a record in the real service;
+the mock simulates confirmation. Failed, pending, denied and unconfirmed commands,
+including acknowledgements arriving after timeout, do not replace it. The record
+is shared across sessions, retained across device restarts, and cleared by service
+restart. It is historical evidence, not a claim about current LED state. Older
+services may omit this additive field; clients must tolerate its absence.
+
 ### 2.4 `POST /api/command`
 
 Requests an output change on the target.
@@ -198,6 +213,12 @@ limit. No browser REST server is part of the board firmware.
 ---
 
 ## 5. Changelog
+
+### 0.3.1 — live monitoring details
+
+- Add shared last-confirmed-command history to status in the service and mock.
+- Document device uptime and report age; distinguish stale telemetry and command
+  history from the current device report. Device wire protocol is unchanged.
 
 ### 0.3.0 — live target integration
 

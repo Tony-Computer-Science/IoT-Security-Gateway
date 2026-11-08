@@ -95,3 +95,22 @@ for another memory variant; physical observation above verifies this tested unit
   while the physical target firmware was stopped in its ROM bootloader.
 - [Hardware events](assets/s3-test/hardware-events.png): confirmed on/off commands,
   heartbeat expiry, device restart and recovered channel.
+
+## Monitoring enhancement validation — 2026-11-07
+
+- Fifteen backend tests pass, including shared confirmation history, preservation
+  across failed/pending commands and device restarts, service-reset clearing,
+  mock parity, and exclusion of late unconfirmed acknowledgements.
+- Browser JavaScript syntax and asset budget pass. Firmware is unchanged.
+- Real S3/browser: device uptime differed from freshly restarted service uptime;
+  ON acknowledgement populated command history. Stopping firmware marked device
+  uptime offline and disabled commands. Restart reset ESP uptime and reported LED
+  OFF while preserving the historical ON confirmation. A subsequent browser OFF
+  command replaced the historical record with OFF.
+- Browser-only status-request failure injection marked retained uptime and history
+  stale and disabled controls; removing the failure restored live monitoring.
+- Desktop and 390px mobile layouts were visually inspected.
+
+Screenshots: [live monitoring](assets/s3-test/live-monitoring.png),
+[offline report](assets/s3-test/live-monitoring-offline.png), and
+[device restart with retained command history](assets/s3-test/live-monitoring-restart.png).

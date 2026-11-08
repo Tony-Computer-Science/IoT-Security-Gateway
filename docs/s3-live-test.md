@@ -90,7 +90,13 @@ module. See the evidence report below for the method and remaining limitations.
 
 The live view labels PC uptime as **API service uptime** and labels the
 heartbeat-based signal **Device channel**. Its explanatory note explicitly
-states that A/B link and network isolation are not measured.
+states that A/B link and network isolation are not measured. The monitoring row
+shows **ESP uptime** from the latest report, with an offline/stale label when
+reports or status updates stop. **Last confirmed command** shows the action,
+reported result and service uptime at confirmation. This history is shared across
+sessions, survives device restarts and clears on service restart. Failed or
+unconfirmed commands never overwrite it; current LED state remains a separate
+readout.
 
 ## Repeatable software checks
 

@@ -60,7 +60,8 @@ class DeviceGateway(MockGateway):
                          "status_source": "device_http",
                          "last_seen_s": None if self.last_seen is None else
                              max(0, round(self.clock() - self.last_seen, 1)),
-                         "device_uptime_s": self.device_uptime_s}
+                         "device_uptime_s": self.device_uptime_s,
+                         "last_confirmed_command": self.last_confirmed_command}
 
     def events_list(self, auth, query):
         with self.lock:
@@ -99,6 +100,9 @@ class DeviceGateway(MockGateway):
                 self.changed.wait(remaining)
             self.pending = None
             if pending["result"] is True:
+                self.last_confirmed_command = {"action": pending["action"],
+                                               "output": pending["output"],
+                                               "service_uptime_s": self.uptime()}
                 self._log("command", "allowed", pending["action"] + " confirmed by device")
                 return 200, {"result": "ok", "output": pending["output"]}
             # Delivered commands may have changed the LED even if the ACK was
@@ -147,7 +151,7 @@ class DeviceGateway(MockGateway):
 
 
 class DeviceHandler(Handler):
-    server_version = "gateway-device-ui/0.3.0"
+    server_version = "gateway-device-ui/0.3.1"
 
     def setup(self):
         super().setup()

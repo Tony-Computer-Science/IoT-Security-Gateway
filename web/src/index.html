@@ -97,6 +97,19 @@
             <p id="command-result" class="state" data-state="" role="status" hidden></p>
           </li>
         </ol>
+        <div id="live-monitoring" class="monitoring" hidden>
+          <dl>
+            <dt>ESP uptime</dt>
+            <dd id="device-uptime" class="monitoring-value">Unknown</dd>
+            <dd id="device-uptime-note" class="medium">Waiting for first device report</dd>
+          </dl>
+          <dl>
+            <dt>Last confirmed command</dt>
+            <dd id="last-command" class="monitoring-value">None yet</dd>
+            <dd id="last-command-note" class="medium">No command confirmed since service start</dd>
+          </dl>
+          <p class="medium monitoring-note">Command history is shared across signed-in users and resets with the service. It does not replace the latest LED state above.</p>
+        </div>
       </div>
       <button type="button" id="logout-btn" class="link-btn">Sign out</button>
     </section>
