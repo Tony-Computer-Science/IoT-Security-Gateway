@@ -18,7 +18,7 @@ from http.server import ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from web.mock.server import ACTIONS, ApiError, FIXTURES, Handler, MockGateway
+from web.mock.server import ACTIONS, API_VERSION, ApiError, FIXTURES, Handler, MockGateway
 
 DEVICE_ID = re.compile(r"[A-Za-z0-9_-]{1,32}\Z")
 BOOT_ID = re.compile(r"[0-9a-f]{16}\Z")
@@ -89,7 +89,7 @@ class DeviceGateway(MockGateway):
             self.command_times.append(now)
             pending = {"id": secrets.token_hex(16), "action": body["action"],
                        "boot": self.device_boot, "delivered": False, "result": None,
-                       "output": None}
+                       "output": None, "device_failed": False}
             self.pending = pending
             deadline = time.monotonic() + self.command_timeout_s
             self.changed.notify_all()
@@ -105,6 +105,13 @@ class DeviceGateway(MockGateway):
                                                "service_uptime_s": self.uptime()}
                 self._log("command", "allowed", pending["action"] + " confirmed by device")
                 return 200, {"result": "ok", "output": pending["output"]}
+            if pending["device_failed"]:
+                # A negative driver acknowledgement is not optical proof that the
+                # LED stayed unchanged, so report the device's latest state
+                # rather than claiming nothing happened.
+                self._log("command", "alert", "%s failed: device reported output %s"
+                          % (pending["action"], pending["output"]))
+                raise ApiError(502, "command_failed", output=pending["output"])
             # Delivered commands may have changed the LED even if the ACK was
             # lost. Do not represent that uncertainty as an unchanged output.
             self._log("target", "alert", "device command confirmation unavailable")
@@ -140,8 +147,13 @@ class DeviceGateway(MockGateway):
             if (pending is not None and pending["result"] is None
                     and pending["boot"] == self.device_boot):
                 if body["ack_id"] == pending["id"] and pending["delivered"]:
-                    pending["result"] = body["ack_ok"] and body["output"] == ACTIONS[pending["action"]]
+                    applied = body["ack_ok"] and body["output"] == ACTIONS[pending["action"]]
+                    pending["result"] = applied
                     pending["output"] = body["output"]
+                    # The device answered this exact command and said it did not
+                    # reach the requested state. That is a known failure, not
+                    # a lost acknowledgement.
+                    pending["device_failed"] = not applied
                 if pending["result"] is None:
                     pending["delivered"] = True
                     self.changed.notify_all()
@@ -151,7 +163,7 @@ class DeviceGateway(MockGateway):
 
 
 class DeviceHandler(Handler):
-    server_version = "gateway-device-ui/0.3.1"
+    server_version = "gateway-device-ui/" + API_VERSION
 
     def setup(self):
         super().setup()
@@ -162,20 +174,29 @@ class DeviceHandler(Handler):
         if path.path.startswith("/__mock/"):
             self.send_json(404, {"error": "not_found"})
             return
-        if path.path.startswith("/device/"):
+        if not path.path.startswith("/device/"):
+            # Browser and API requests share a smaller pool so they can never
+            # take every worker; the remainder stays free for device polls.
+            if not self.server.browser_slots.acquire(blocking=False):
+                self.close_connection = True
+                self.send_json(503, {"error": "server_busy", "retry_after": 1})
+                return
             try:
-                if path.path != "/device/poll":
-                    raise ApiError(404, "not_found")
-                if method != "POST":
-                    raise ApiError(405, "method_not_allowed")
-                if path.query or self.headers.get_content_type() != "application/json":
-                    raise ApiError(400, "invalid_request")
-                status, body = self.gateway.poll(self.json_body())
-            except ApiError as error:
-                status, body = error.status, error.body
-            self.send_json(status, body)
+                super().dispatch(method)
+            finally:
+                self.server.browser_slots.release()
             return
-        super().dispatch(method)
+        try:
+            if path.path != "/device/poll":
+                raise ApiError(404, "not_found")
+            if method != "POST":
+                raise ApiError(405, "method_not_allowed")
+            if path.query or self.headers.get_content_type() != "application/json":
+                raise ApiError(400, "invalid_request")
+            status, body = self.gateway.poll(self.json_body())
+        except ApiError as error:
+            status, body = error.status, error.body
+        self.send_json(status, body)
 
     def log_message(self, fmt, *args):
         if not self.quiet:
@@ -184,10 +205,19 @@ class DeviceHandler(Handler):
 
 
 class DeviceHTTPServer(ThreadingHTTPServer):
+    """Caps worker threads and keeps device_slots of them away from browser traffic.
+
+    Each connection carries one request (HTTP/1.0), so a slot is held only for
+    one request. Connections that have not yet sent a request line still use
+    the shared pool; a deliberate slow-header flood is not addressed here.
+    """
     daemon_threads = True
 
-    def __init__(self, *args, **kwargs):
-        self.slots = threading.BoundedSemaphore(16)
+    def __init__(self, *args, total_slots=24, device_slots=8, **kwargs):
+        if not 0 < device_slots < total_slots:
+            raise ValueError("device_slots must be between 1 and total_slots - 1")
+        self.slots = threading.BoundedSemaphore(total_slots)
+        self.browser_slots = threading.BoundedSemaphore(total_slots - device_slots)
         super().__init__(*args, **kwargs)
 
     def process_request(self, request, client_address):

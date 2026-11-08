@@ -551,6 +551,17 @@ function handleCommandError(err) {
       setStateMessage('command-result', 'link-down',
         `Command not delivered: the station board and the bridge board cannot talk over the UART wire. ${unchanged}`);
       break;
+    case api.ErrorCode.COMMAND_FAILED:
+      // The device answered and said the switch did not take. That is not
+      // optical proof the LED is untouched, so name the device's own report
+      // instead of saying "unchanged". The next poll refreshes the display.
+      setStateMessage('command-result', 'denied',
+        `The device reported that switching the LED failed${err.reportedOutput ? ` and says the LED is ${err.reportedOutput}` : ''}. The command will not be retried automatically.`);
+      break;
+    case api.ErrorCode.SERVER_BUSY:
+      setStateMessage('command-result', 'rate-limited',
+        `The API service is busy and did not accept the command. Wait a moment and try again. ${unchanged}`);
+      break;
     case api.ErrorCode.COMMAND_UNCONFIRMED:
       setStateMessage('command-result', 'denied',
         'The device did not confirm this command. Its LED may have changed. Waiting for a fresh device report; the command will not be retried automatically.');
