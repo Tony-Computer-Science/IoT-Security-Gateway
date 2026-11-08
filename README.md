@@ -80,6 +80,15 @@ Keep passwords in private configuration, not this README.
    password. Use `device_server.py` for hardware control; the mock server
    only simulates a device. Until Board C connects, unavailable device status
    and disabled command buttons are expected.
+
+   The service also monitors the gateway live: it pings Board A
+   (`192.168.78.1`) every 2 s and opens a connection to `1.1.1.1:443` through
+   A, the UART link and Board B every 5 s. The control page shows each result
+   with a five-minute up/down timeline, and changes appear in the event log.
+   The path check is only meaningful while this computer routes through
+   Board A, so keep it off other networks (Ethernet, a second Wi-Fi) during
+   the demo. Use `--outside IPv4:port` if the upstream network blocks that
+   address.
 5. **Power on the third C6, the IoT device.** Its firmware must have the
    **IoT-Gateway** SSID/passphrase, service address **192.168.78.10**, port
    **8000**, and device ID **iot-c6**. It joins Wi-Fi automatically and polls

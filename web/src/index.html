@@ -110,6 +110,34 @@
           </dl>
           <p class="medium monitoring-note">Command history is shared across signed-in users and resets with the service. It does not replace the latest LED state above.</p>
         </div>
+        <section id="gateway-monitoring" class="gateway-monitor" aria-labelledby="gw-heading" hidden>
+          <h3 id="gw-heading">Live gateway monitoring</h3>
+          <p id="gw-diagnosis" class="state" data-state="" role="status"></p>
+          <ul class="gw-rows">
+          <li class="gw-row" data-component="board_a">
+            <div class="gw-name">Board A<span id="gw-board_a-medium" class="medium">Ping from this computer</span></div>
+            <div id="gw-board_a-state" class="gw-value" data-value="unknown">Unknown</div>
+            <div id="gw-board_a-detail" class="gw-detail medium"></div>
+            <div id="gw-board_a-strip" class="gw-strip" role="img" aria-label="No history yet"></div>
+          </li>
+          <li class="gw-row" data-component="gateway_path">
+            <div class="gw-name">Path through the gateway<span id="gw-gateway_path-medium" class="medium">UART link, Board B and its upstream Wi-Fi</span></div>
+            <div id="gw-gateway_path-state" class="gw-value" data-value="unknown">Unknown</div>
+            <div id="gw-gateway_path-detail" class="gw-detail medium"></div>
+            <div id="gw-gateway_path-strip" class="gw-strip" role="img" aria-label="No history yet"></div>
+          </li>
+          <li class="gw-row" data-component="device">
+            <div class="gw-name">IoT device C<span id="gw-device-medium" class="medium">Heartbeat to the API service</span></div>
+            <div id="gw-device-state" class="gw-value" data-value="unknown">Unknown</div>
+            <div id="gw-device-detail" class="gw-detail medium"></div>
+            <div id="gw-device-strip" class="gw-strip" role="img" aria-label="No history yet"></div>
+          </li>
+            <li class="gw-row gw-axis-row" aria-hidden="true">
+              <div class="gw-axis medium"><span id="gw-axis-start">5 min ago</span><span>now</span></div>
+            </li>
+          </ul>
+          <p id="gw-note" class="medium monitoring-note"></p>
+        </section>
       </div>
       <button type="button" id="logout-btn" class="link-btn">Sign out</button>
     </section>

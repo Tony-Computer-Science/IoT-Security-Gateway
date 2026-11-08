@@ -1,4 +1,4 @@
-// REST client for docs/api-contract.md v0.3.2.
+// REST client for docs/api-contract.md v0.3.3.
 //
 // Rules for this module:
 //   - One exported function per endpoint.
@@ -9,7 +9,7 @@
 //     written to localStorage, sessionStorage, cookies, or the URL (R2).
 //   - Uses relative paths only. No scheme, host, or port.
 
-export const API_VERSION = '0.3.2';
+export const API_VERSION = '0.3.3';
 
 const REQUEST_TIMEOUT_MS = 8000;
 

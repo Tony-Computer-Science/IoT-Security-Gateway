@@ -27,7 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-API_VERSION = "0.3.2"
+API_VERSION = "0.3.3"
 
 HERE = Path(__file__).resolve().parent
 SRC_DIR = (HERE.parent / "src").resolve()
