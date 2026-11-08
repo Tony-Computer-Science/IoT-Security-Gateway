@@ -102,11 +102,16 @@ readout.
 
 ```sh
 bash ci/run.sh
-# After an ESP-IDF build installs managed cJSON:
-python3 tools/test/run_target_tests.py
 ```
 
-The Python tests use a software device actor over real HTTP. Keep that test
+This runs the service tests, the browser REST-client tests (`node --test`), the
+firmware parser tests with sanitizers (UBSan only on macOS) and the web build.
+The parser step uses managed cJSON when an ESP-IDF build installed it, and
+otherwise downloads the same pinned archive and checks its SHA-256.
+
+The Python tests use a software device actor over real HTTP. The JavaScript
+tests stub `fetch` and cover `web/src/api.js`; `app.js` screen behavior still
+has manual browser evidence only. Keep that test
 result separate from physical LED/radio acceptance. The PR workflow is gated by repository variable `ENABLE_HOSTED_TESTS=true`.
 The owner must first verify private Actions allowance: billing and Actions
 permissions were unavailable to the current account. Until enabled, the job is
