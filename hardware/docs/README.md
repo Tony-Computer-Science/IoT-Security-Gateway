@@ -44,12 +44,6 @@ can use SPI2 without going through the GPIO matrix. HS is a plain GPIO.
 
 All other GPIOs are unconnected on the PCB.
 
-### Board C (target)
-
-| Function | GPIO | Notes |
-|---|---|---|
-| LED | TODO | On-board RGB LED, or external LED + resistor? (Board C is not on the PCB) |
-
 ## Wiring
 
 - **PCB (Rev A):** the SPI and HS lines run about 75 mm between the modules on
@@ -60,12 +54,8 @@ All other GPIOs are unconnected on the PCB.
   row of the table above (10, 11, 12, 13, 4), plus GND. Fit the pull-up on CS at
   Board B and the pull-down on HS at Board A (10 kΩ each) so the idle states
   match the PCB.
-- TODO: wiring diagram (put the image in `docs/assets/` or here), wire lengths,
-  connector type.
 
 ## Bring-up checklist
-
-TODO, suggested steps:
 
 1. Continuity check of every link wire, including GND.
 2. Logic-analyzer capture of SCLK/CS at the intended clock.
