@@ -30,8 +30,7 @@ reads them from there.
 
 ## Opening the KiCad project
 
-Install [KiCad](https://www.kicad.org/) 10 (TODO: agree on a team version, since
-newer KiCad files can't be opened by older versions). Open
+Install [KiCad](https://www.kicad.org/) 10. Open
 `kicad/IoT-Gateway.kicad_pro`.
 
 Per-user and generated files (`*.kicad_prl`, `*-backups/`, `fp-info-cache`) are
