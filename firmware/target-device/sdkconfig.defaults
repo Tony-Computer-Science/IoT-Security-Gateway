@@ -2,9 +2,12 @@
 # NEVER put Wi-Fi credentials, keys, or passwords here (R2). Set them with
 # `idf.py menuconfig`, which writes the git-ignored `sdkconfig`.
 
-CONFIG_IDF_TARGET="esp32s3"
+CONFIG_IDF_TARGET="esp32c6"
 
-# Default single-app partition table for now.
-# TODO(hardware): confirm the module's flash size and set CONFIG_ESPTOOLPY_FLASHSIZE_*.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
+CONFIG_LWIP_IPV6=n
 
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y

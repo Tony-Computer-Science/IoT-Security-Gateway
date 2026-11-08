@@ -1,0 +1,6 @@
+# S3 N16R8 target: select esp32s3 explicitly when configuring.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# PSRAM is unnecessary for this small application and remains disabled.
+# Set TARGET_LED_GPIO to the verified carrier pin in private sdkconfig.

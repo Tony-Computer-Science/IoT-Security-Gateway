@@ -351,7 +351,12 @@ const GATEWAY_UNREACHABLE_TEXT =
   'Could not reach the gateway. Check your connection and try again.';
 
 // Last state reported by the gateway. null means "not known yet".
-const shown = { output: null, target_reachable: null, link_ok: null, uptime_s: null };
+const shown = {
+  output: null, target_reachable: null, link_ok: null, uptime_s: null,
+  device_uptime_s: null, last_confirmed_command: null,
+};
+let liveDeviceMode = false;
+let statusFresh = false;
 let shownForSession = 0; // sessionExpiresAt of the session `shown` belongs to
 
 let controlWired = false;
@@ -373,7 +378,12 @@ function renderControl(el) {
   // A new login must not show the previous session's state.
   if (shownForSession !== sessionExpiresAt) {
     shownForSession = sessionExpiresAt;
-    Object.assign(shown, { output: null, target_reachable: null, link_ok: null, uptime_s: null });
+    statusFresh = false;
+    liveDeviceMode = false;
+    Object.assign(shown, {
+      output: null, target_reachable: null, link_ok: null, uptime_s: null,
+      device_uptime_s: null, last_confirmed_command: null,
+    });
     setStateMessage('control-state', '', '');
     setStateMessage('command-result', '', '');
   }
@@ -387,10 +397,36 @@ function renderControl(el) {
  */
 function renderStatus(status) {
   const wasHealthy = isHealthy();
+  statusFresh = true;
+  liveDeviceMode = status.status_source === 'device_http';
+  document.getElementById('uptime-label').textContent = liveDeviceMode ? 'API service uptime' : 'Gateway uptime';
+  document.getElementById('link-label').textContent = liveDeviceMode ? 'Device channel' : 'Board-to-board link';
+  document.getElementById('link-medium').textContent = liveDeviceMode
+    ? 'HTTP heartbeat between the API service and target'
+    : 'UART wire, bridge board B to station board A';
+  document.getElementById('target-medium').textContent = liveDeviceMode
+    ? (status.last_seen_s === null ? 'Waiting for first device report' : `Last report: ${status.last_seen_s}s ago`)
+    : 'Private Wi-Fi "IoT-Gateway", station board A to IoT device C';
+  const note = document.getElementById('live-test-note');
+  note.hidden = !liveDeviceMode;
+  note.textContent = 'Live device test: gateway A/B link and network isolation are not measured. LED state is the last device report.';
+  document.querySelector('.path').dataset.live = String(liveDeviceMode);
+  document.querySelector('.path').setAttribute('aria-label', liveDeviceMode ? 'Device test status' : 'Signal path from the gateway to the device');
+  const nodes = document.querySelectorAll('.node-box');
+  nodes[0].textContent = liveDeviceMode ? 'API' : 'B';
+  nodes[1].textContent = liveDeviceMode ? 'Wi-Fi' : 'A';
   if (status.output === 'on' || status.output === 'off') shown.output = status.output;
   shown.target_reachable = status.target_reachable === true;
   shown.link_ok = status.link_ok === true;
   shown.uptime_s = typeof status.uptime_s === 'number' ? status.uptime_s : null;
+  shown.device_uptime_s = Number.isSafeInteger(status.device_uptime_s) && status.device_uptime_s >= 0
+    ? status.device_uptime_s : null;
+  const confirmed = status.last_confirmed_command;
+  shown.last_confirmed_command = confirmed &&
+    ((confirmed.action === 'led_on' && confirmed.output === 'on') ||
+     (confirmed.action === 'led_off' && confirmed.output === 'off')) &&
+    Number.isSafeInteger(confirmed.service_uptime_s) && confirmed.service_uptime_s >= 0 &&
+    confirmed.service_uptime_s <= shown.uptime_s ? confirmed : null;
 
   // On the transition from healthy into a problem, clear the last command
   // result: a green "Done" under a live failure would read as "all fine"
@@ -403,7 +439,7 @@ function renderStatus(status) {
   // shown. (The old reason, that A could not see the target without B, no
   // longer holds: C is on A's own Wi-Fi. The order itself is unchanged.)
   if (!shown.link_ok) {
-    setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
+    setStateMessage('control-state', 'link-down', liveDeviceMode ? 'Device heartbeat unavailable. Commands are disabled; the LED display is the last reported state.' : LINK_DOWN_TEXT);
   } else if (!shown.target_reachable) {
     setStateMessage('control-state', 'target-unreachable', TARGET_UNREACHABLE_TEXT);
   } else {
@@ -431,7 +467,12 @@ function renderStatusError(err) {
     err.code === api.ErrorCode.NETWORK || err.code === api.ErrorCode.TIMEOUT
       ? GATEWAY_UNREACHABLE_TEXT
       : `Status update failed (${err.code}).`;
-  setStateMessage('control-state', 'denied', `${text} Showing the last known state.`);
+  statusFresh = false;
+  if (liveDeviceMode) {
+    document.getElementById('target-medium').textContent = 'Report age unavailable · status updates stopped';
+  }
+  setStateMessage('control-state', 'denied', `${text} Showing the last known state. Commands are disabled until status recovers.`);
+  renderShown();
 }
 
 async function onCommandClick(action) {
@@ -502,13 +543,17 @@ function handleCommandError(err) {
       shown.target_reachable = false;
       setStateMessage('control-state', 'target-unreachable', TARGET_UNREACHABLE_TEXT);
       setStateMessage('command-result', 'target-unreachable',
-        `Command not delivered: the station board could not reach the IoT device. ${unchanged}`);
+        `Command not delivered: the API service could not reach the IoT device. ${unchanged}`);
       break;
     case api.ErrorCode.LINK_DOWN:
       shown.link_ok = false;
-      setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
+      setStateMessage('control-state', 'link-down', liveDeviceMode ? 'Device heartbeat unavailable. Commands are disabled; the LED display is the last reported state.' : LINK_DOWN_TEXT);
       setStateMessage('command-result', 'link-down',
         `Command not delivered: the station board and the bridge board cannot talk over the UART wire. ${unchanged}`);
+      break;
+    case api.ErrorCode.COMMAND_UNCONFIRMED:
+      setStateMessage('command-result', 'denied',
+        'The device did not confirm this command. Its LED may have changed. Waiting for a fresh device report; the command will not be retried automatically.');
       break;
     case api.ErrorCode.NETWORK:
     case api.ErrorCode.TIMEOUT:
@@ -568,7 +613,7 @@ function isHealthy() {
 // R7: commands are enabled only when the last status said both the link and
 // the target are up, and nothing else is blocking them.
 function commandsAllowed() {
-  return isHealthy() && Date.now() >= commandCooldownEndsAt;
+  return statusFresh && isHealthy() && Date.now() >= commandCooldownEndsAt;
 }
 
 function renderShown() {
@@ -579,6 +624,22 @@ function renderShown() {
   document.getElementById('status-link').textContent = label(shown.link_ok, 'Up', 'Down');
   document.getElementById('status-uptime').textContent =
     shown.uptime_s === null ? 'Unknown' : formatUptime(shown.uptime_s);
+
+  document.getElementById('live-monitoring').hidden = !liveDeviceMode;
+  document.getElementById('device-uptime').textContent = shown.device_uptime_s === null
+    ? 'Unknown' : formatUptime(shown.device_uptime_s);
+  document.getElementById('device-uptime-note').textContent = shown.device_uptime_s === null
+    ? 'Waiting for first device report'
+    : !statusFresh ? 'Last reported uptime · status updates unavailable'
+      : !isHealthy() ? 'Last reported uptime · device offline'
+        : 'Since ESP restart · measured at last report';
+  const confirmed = shown.last_confirmed_command;
+  document.getElementById('last-command').textContent = confirmed
+    ? `${confirmed.action === 'led_on' ? 'Turn on' : 'Turn off'} → ${confirmed.output.toUpperCase()} confirmed`
+    : 'None yet';
+  document.getElementById('last-command-note').textContent = confirmed
+    ? `Confirmed at service uptime ${formatUptime(confirmed.service_uptime_s)}${statusFresh ? '' : ' · history may be stale'}`
+    : 'No command confirmed since service start';
 
   // Presentation hooks for CSS (the LED lamp and the signal-path wires).
   // CONFIRMED STATE ONLY: these read `shown`, which is written only from

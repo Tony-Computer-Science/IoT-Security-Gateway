@@ -269,6 +269,19 @@ button:disabled,
    Hierarchy: values first (one size, one baseline), then their labels, then
    the path strip, which is context and deliberately quiet until it breaks.
    --------------------------------------------------------------------------- */
+.monitoring {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--rule);
+}
+.monitoring dl { margin: 0; min-width: 0; }
+.monitoring dd { margin: 0.5rem 0 0; }
+.monitoring-value { font: 700 1.15rem/1.4 var(--font-mono); overflow-wrap: anywhere; }
+.monitoring-note { grid-column: 1 / -1; margin: 0; }
+
 .uptime { display: flex; align-items: baseline; gap: 0.75rem; margin: 0; }
 .uptime dd {
   margin: 0;
@@ -645,4 +658,12 @@ button:disabled,
   .panel { padding: var(--space-3); }
   #status-link, #status-target, #status-output { font-size: 1.875rem; }
   .health { font-size: 1.125rem; }
+}
+
+/* Live test labels can be wider than the single-letter hardware nodes. */
+.path[data-live="true"] .node-box {
+  width: auto;
+  min-width: 4rem;
+  padding-inline: 0.35rem;
+  white-space: nowrap;
 }

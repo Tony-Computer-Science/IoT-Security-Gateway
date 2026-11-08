@@ -1,0 +1,23 @@
+name: Device integration checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: device-tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  test:
+    # Owner must verify private Actions allowance before enabling paid-capable jobs.
+    if: vars.ENABLE_HOSTED_TESTS == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate HTTP behavior and web assets
+        run: bash ci/run.sh

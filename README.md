@@ -1,5 +1,10 @@
 # IoT Security Gateway
 
+> **S3 live-test branch:** the login/control/events UI can use the real-device
+> Python service and ESP32-S3 target. Start with [the live-test guide](docs/s3-live-test.md).
+> The original architecture and scaffolding notes below describe the main-line
+> proposal; this application test does not establish gateway isolation.
+
 **CyberGuards, CSE 484.** A low-cost IoT security gateway built from three
 ESP32-S3-DevKitC-1 boards. It protects an existing insecure IoT device without
 changing that device.
