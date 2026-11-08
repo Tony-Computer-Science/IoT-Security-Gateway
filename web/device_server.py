@@ -5,6 +5,7 @@ Browser authentication remains required. The device channel is intentionally
 unauthenticated plain HTTP, matching the evaluation target's lab-only design.
 """
 import argparse
+import ipaddress
 import json
 import math
 import os
@@ -19,6 +20,7 @@ from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from web.mock.server import ACTIONS, API_VERSION, ApiError, FIXTURES, Handler, MockGateway
+from web.gateway_monitor import GatewayMonitor, History, parse_outside, ping_probe, tcp_probe
 
 DEVICE_ID = re.compile(r"[A-Za-z0-9_-]{1,32}\Z")
 BOOT_ID = re.compile(r"[0-9a-f]{16}\Z")
@@ -41,12 +43,22 @@ class DeviceGateway(MockGateway):
         self.device_uptime_s = None
         self.pending = None
         self.link_ok = self.target_reachable = False
+        self.t0 = clock()
+        self.history_window_s = 300
+        self.device_history = History(self.history_window_s)
+        self.monitor = GatewayMonitor(self)  # disabled until main() configures checks
+
+    def now_s(self):
+        """Seconds since service start on the injected clock; timeline time base."""
+        return self.clock() - self.t0
 
     def _refresh(self):
         fresh = self.last_seen is not None and self.clock() - self.last_seen <= self.stale_s
         if self.target_reachable != fresh:
             self._log("target", "allowed" if fresh else "alert",
                       "device channel available" if fresh else "device heartbeat expired")
+        self.device_history.record(self.now_s(), "unknown" if self.last_seen is None
+                                   else "up" if fresh else "down")
         self.link_ok = self.target_reachable = fresh
         return fresh
 
@@ -61,7 +73,8 @@ class DeviceGateway(MockGateway):
                          "last_seen_s": None if self.last_seen is None else
                              max(0, round(self.clock() - self.last_seen, 1)),
                          "device_uptime_s": self.device_uptime_s,
-                         "last_confirmed_command": self.last_confirmed_command}
+                         "last_confirmed_command": self.last_confirmed_command,
+                         "monitoring": self.monitor.snapshot()}
 
     def events_list(self, auth, query):
         with self.lock:
@@ -280,19 +293,37 @@ def main():
     parser.add_argument("--host", default="192.168.78.10")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--device-id", default="iot-c6")
+    parser.add_argument("--gateway-ip", default="192.168.78.1",
+                        help="Board A's AP address, checked by ping (default: %(default)s)")
+    parser.add_argument("--outside", default="1.1.1.1:443",
+                        help="IPv4:port outside the gateway, reached through A and B (default: %(default)s)")
+    parser.add_argument("--no-gateway-checks", action="store_true",
+                        help="disable gateway checks, e.g. for a bench test without Boards A and B")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
     if not DEVICE_ID.fullmatch(args.device_id) or not 1 <= args.port <= 65535:
         parser.error("invalid device ID or port")
+    try:
+        gateway_ip = str(ipaddress.IPv4Address(args.gateway_ip))
+        outside_host, outside_port = parse_outside(args.outside)
+    except ValueError:
+        parser.error("--gateway-ip must be IPv4 and --outside must be IPv4:port")
     configured_password = os.environ.get("UI_PASSWORD")
     password = configured_password or secrets.token_urlsafe(12)
-    DeviceHandler.gateway = DeviceGateway(FIXTURES, password, args.device_id)
+    DeviceHandler.gateway = gateway = DeviceGateway(FIXTURES, password, args.device_id)
+    if not args.no_gateway_checks:
+        gateway.monitor = GatewayMonitor(
+            gateway, lambda: ping_probe(gateway_ip), lambda: tcp_probe(outside_host, outside_port),
+            gateway_ip=gateway_ip, outside="%s:%d" % (outside_host, outside_port))
     DeviceHandler.quiet = args.quiet
     with DeviceHTTPServer((args.host, args.port), DeviceHandler) as server:
+        gateway.monitor.start()
         print("IoT device UI: http://%s:%d/" % (args.host, args.port))
         print("Username: %s" % FIXTURES["username"])
         print("Password: %s" % ("(from UI_PASSWORD)" if configured_password else password))
         print("Waiting for device %s; lab-only unauthenticated HTTP device channel" % args.device_id)
+        print("Gateway checks: %s" % ("off" if args.no_gateway_checks else
+              "ping %s, connect %s:%d" % (gateway_ip, outside_host, outside_port)))
         try:
             server.serve_forever()
         except KeyboardInterrupt:

@@ -667,3 +667,47 @@ button:disabled,
   padding-inline: 0.35rem;
   white-space: nowrap;
 }
+
+/* Live gateway monitoring: one row per checked component, each with a
+   five-minute up/down strip. Colour is never the only cue: down segments are
+   hatched and every row states its value in text. */
+.gateway-monitor {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--rule);
+}
+.gateway-monitor h3 { margin: 0 0 var(--space-3); font-size: 1rem; }
+.gw-rows { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+.gw-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1.3fr) minmax(6rem, 0.6fr) minmax(0, 3fr);
+  grid-template-areas: "name value strip" "name detail detail";
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+}
+.gw-name { grid-area: name; font-weight: 700; display: grid; gap: var(--space-1); }
+.gw-name .medium { font-weight: 400; }
+.gw-value { grid-area: value; font: 700 1.05rem/1.2 var(--font-mono); }
+.gw-value[data-value="up"] { color: var(--ok); }
+.gw-value[data-value="down"] { color: var(--denied); }
+.gw-value[data-value="unknown"], .gw-value[data-value="off"] { color: var(--legend); }
+.gw-detail { grid-area: detail; }
+.gw-strip {
+  grid-area: strip;
+  position: relative;
+  height: 1.25rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--faceplate);
+  overflow: hidden;
+}
+.gw-seg { position: absolute; top: 0; bottom: 0; }
+.gw-seg-up { background: var(--ok); }
+.gw-seg-down { background: repeating-linear-gradient(-45deg, var(--denied) 0 5px, var(--denied-bg) 5px 8px); }
+.gw-seg-unknown, .gw-seg-off { background: var(--hatch); opacity: 0.6; }
+.gw-axis-row { grid-template-areas: ". . strip"; margin-top: calc(-1 * var(--space-2)); }
+.gw-axis { grid-area: strip; display: flex; justify-content: space-between; }
+@media (max-width: 46rem) {
+  .gw-row { grid-template-columns: 1fr auto; grid-template-areas: "name value" "strip strip" "detail detail"; }
+  .gw-axis-row { grid-template-areas: "strip strip"; }
+}

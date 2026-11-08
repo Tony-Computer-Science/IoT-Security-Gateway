@@ -5,6 +5,7 @@
 // with the `hidden` attribute.
 
 import * as api from './api.js';
+import { downSeconds, timelineSegments } from './timeline.js';
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -352,7 +353,7 @@ const GATEWAY_UNREACHABLE_TEXT =
 // Last state reported by the gateway. null means "not known yet".
 const shown = {
   output: null, target_reachable: null, link_ok: null, uptime_s: null,
-  device_uptime_s: null, last_confirmed_command: null,
+  device_uptime_s: null, last_confirmed_command: null, monitoring: null,
 };
 let liveDeviceMode = false;
 let statusFresh = false;
@@ -381,7 +382,7 @@ function renderControl(el) {
     liveDeviceMode = false;
     Object.assign(shown, {
       output: null, target_reachable: null, link_ok: null, uptime_s: null,
-      device_uptime_s: null, last_confirmed_command: null,
+      device_uptime_s: null, last_confirmed_command: null, monitoring: null,
     });
     setStateMessage('control-state', '', '');
     setStateMessage('command-result', '', '');
@@ -408,7 +409,11 @@ function renderStatus(status) {
     : 'Private Wi-Fi "IoT-Gateway", station board A to IoT device C';
   const note = document.getElementById('live-test-note');
   note.hidden = !liveDeviceMode;
-  note.textContent = 'Live device test: gateway A/B link and network isolation are not measured. LED state is the last device report.';
+  const monitoring = status.monitoring && typeof status.monitoring === 'object' ? status.monitoring : null;
+  shown.monitoring = liveDeviceMode ? monitoring : null;
+  note.textContent = monitoring && monitoring.enabled === true
+    ? 'Live device test: the gateway is checked from this computer (Board A by ping, the path through the UART link and Board B by an outside connection). Network isolation is not measured. LED state is the last device report.'
+    : 'Live device test: gateway A/B link and network isolation are not measured. LED state is the last device report.';
   document.querySelector('.path').dataset.live = String(liveDeviceMode);
   document.querySelector('.path').setAttribute('aria-label', liveDeviceMode ? 'Device test status' : 'Signal path from the gateway to the device');
   const nodes = document.querySelectorAll('.node-box');
@@ -666,6 +671,71 @@ function renderShown() {
   for (const btn of document.querySelectorAll('#view-control [data-action]')) {
     btn.disabled = disabled;
   }
+  renderGatewayMonitoring();
+}
+
+// ---------------------------------------------------------------------------
+// Live gateway monitoring (Task 33). Every value comes from the service's
+// own checks (`status.monitoring`); nothing here is inferred in the browser.
+// ---------------------------------------------------------------------------
+
+const GW_DIAGNOSIS = {
+  forwarding: ['ok', 'Gateway forwarding: Board A answers, and traffic passes through the UART link and Board B.'],
+  board_a_down: ['link-down', 'Board A is not answering. Check its power, and that this computer is on its Wi-Fi.'],
+  link_or_upstream_down: ['denied', "Board A answers, but no traffic passes through it: the UART link or Board B's upstream Wi-Fi is down. These checks cannot tell which."],
+  checking: ['pending', 'Checking the gateway…'],
+  not_monitored: ['', 'Gateway checks are off for this service, so only the IoT device is monitored.'],
+};
+const GW_STATE_TEXT = { up: 'Up', down: 'Down', unknown: 'Checking', off: 'Not monitored' };
+
+function renderGatewayMonitoring() {
+  const m = shown.monitoring;
+  const panel = document.getElementById('gateway-monitoring');
+  panel.hidden = !liveDeviceMode || !m;
+  if (panel.hidden) return;
+  const windowS = Number.isFinite(m.window_s) && m.window_s > 0 ? m.window_s : 300;
+  const nowS = Number.isFinite(m.now_s) ? m.now_s : 0;
+  const stale = statusFresh ? '' : ' Status updates stopped; this may be out of date.';
+  const [state, text] = GW_DIAGNOSIS[m.diagnosis] || ['', 'Gateway state unknown.'];
+  setStateMessage('gw-diagnosis', statusFresh ? state : '', text + stale);
+  document.getElementById('gw-axis-start').textContent = `${Math.round(windowS / 60)} min ago`;
+  document.getElementById('gw-note').textContent = m.enabled === true
+    ? 'The path check needs this computer to route through Board A only. Board A and the path are checked from this computer; the device line is its heartbeat.'
+    : 'Start the service without --no-gateway-checks, on Board A\'s Wi-Fi, to check Boards A and B.';
+
+  for (const key of ['board_a', 'gateway_path', 'device']) {
+    const c = m[key] && typeof m[key] === 'object' ? m[key] : { state: 'unknown', history: [] };
+    const value = GW_STATE_TEXT[c.state] ? c.state : 'unknown';
+    const el = document.getElementById(`gw-${key}-state`);
+    el.textContent = GW_STATE_TEXT[value];
+    el.dataset.value = value;
+    if (key !== 'device' && typeof c.target === 'string') {
+      document.getElementById(`gw-${key}-medium`).textContent =
+        key === 'board_a' ? `Ping to ${c.target} from this computer` : `Connection to ${c.target} through A, the UART link and B`;
+    }
+    const parts = [];
+    if (Number.isFinite(c.latency_ms)) parts.push(`${c.latency_ms} ms`);
+    if (Number.isFinite(c.checked_s_ago)) parts.push(`checked ${c.checked_s_ago}s ago`);
+    const down = downSeconds(c.history, nowS, windowS);
+    if (down > 0) parts.push(`down ${Math.round(down)}s in the last ${Math.round(windowS / 60)} min`);
+    document.getElementById(`gw-${key}-detail`).textContent = parts.join(' · ');
+    renderStrip(document.getElementById(`gw-${key}-strip`), c.history, nowS, windowS);
+  }
+}
+
+function renderStrip(strip, history, nowS, windowS) {
+  const segments = timelineSegments(history, nowS, windowS);
+  strip.replaceChildren(...segments.map((s) => {
+    const span = document.createElement('span');
+    span.className = `gw-seg gw-seg-${s.state}`;
+    // CSSOM assignments are permitted by the page's style-src 'self' CSP.
+    span.style.left = `${s.startPct}%`;
+    span.style.width = `${s.widthPct}%`;
+    return span;
+  }));
+  const downs = segments.filter((s) => s.state === 'down').length;
+  strip.setAttribute('aria-label', segments.length === 0 ? 'No history yet'
+    : downs === 0 ? 'No outages in the window' : `${downs} outage${downs === 1 ? '' : 's'} in the window`);
 }
 
 /** Set a .state message; skips identical updates so screen readers are not spammed. */
@@ -713,7 +783,7 @@ function formatUptime(s) {
 // instead of the status poll, so an events refresh and a status poll can
 // never be in flight at the same time.
 
-const EVENT_TYPE_LABELS = { auth: 'Auth', command: 'Command', rate_limit: 'Rate limit', target: 'Target' };
+const EVENT_TYPE_LABELS = { auth: 'Auth', command: 'Command', gateway: 'Gateway', rate_limit: 'Rate limit', target: 'Target' };
 
 let eventsWired = false;
 let eventsLoaded = false; // a list has been shown for this session

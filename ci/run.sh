@@ -3,7 +3,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 python3 tools/test/test_device_server.py
-node --test tools/test/test_web_api.mjs
+python3 tools/test/test_gateway_monitor.py
+node --test tools/test/test_web_api.mjs tools/test/test_web_timeline.mjs
 
 # The macOS AddressSanitizer runtime hangs before main on the development
 # host, so local macOS runs use UBSan only; Linux CI runs both sanitizers.
