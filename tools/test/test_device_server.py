@@ -31,6 +31,19 @@ def exchange(base, method, path, body=None, token=None):
         return response.status, json.loads(raw) if raw else None
 
 
+def raw_post(base, path, data, token=None):
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    request = Request(base + path, data=data, headers=headers, method="POST")
+    try:
+        response = build_opener(ProxyHandler({})).open(request, timeout=3)
+    except HTTPError as error:
+        response = error
+    with response:
+        return response.status, json.loads(response.read() or b"null")
+
+
 def report(**changes):
     body = {"device_id": "iot-c6", "boot_id": "0000000000000001", "output": "off",
             "ack_id": None, "ack_ok": True, "uptime_s": 1}
@@ -258,6 +271,83 @@ class DeviceServerTests(unittest.TestCase):
             worker.join(2)
         with self.assertRaises(ValueError):
             DeviceHTTPServer(("127.0.0.1", 0), self.handler, total_slots=2, device_slots=2)
+
+    def events(self):
+        return exchange(self.base, "GET", "/api/events?limit=200", token=self.token)[1]["events"]
+
+    def assert_logged_once(self, request, expected_status, type_, outcome, detail):
+        """Run one request and require exactly one new event describing it."""
+        before = max((e["seq"] for e in self.events()), default=0)
+        status = request()
+        self.assertEqual(status, expected_status)
+        new = [e for e in self.events() if e["seq"] > before]
+        self.assertEqual([(e["type"], e["outcome"], e["detail"]) for e in new],
+                         [(type_, outcome, detail)])
+
+    def test_every_rejected_command_appears_in_events(self):
+        self.gateway.command_timeout_s = 3  # keep the in-flight command alive while probing
+        command = lambda body: (lambda: exchange(self.base, "POST", "/api/command", body, self.token)[0])
+        # Nothing has reported yet: refused before delivery.
+        self.assert_logged_once(command({"action": "led_on"}), 502,
+                                "command", "denied", "led_on rejected: device unreachable")
+        exchange(self.base, "POST", "/device/poll", report())
+        # Client-supplied values are never echoed into the log.
+        self.assert_logged_once(command({"action": "<script>reboot"}), 400,
+                                "command", "denied", "invalid action rejected")
+        self.assert_logged_once(command({"action": "led_on", "extra": 1}), 400,
+                                "command", "denied", "invalid action rejected")
+        self.assert_logged_once(
+            lambda: raw_post(self.base, "/api/command", b"{not json", self.token)[0], 400,
+            "command", "denied", "malformed command request rejected")
+        self.assert_logged_once(
+            lambda: raw_post(self.base, "/api/command", b'{"action":"' + b"x" * 2000 + b'"}', self.token)[0],
+            413, "command", "denied", "oversized command request rejected")
+        thread, result = self.begin_command()
+        self.assert_logged_once(command({"action": "led_off"}), 429,
+                                "command", "denied", "led_off rejected: previous command still awaiting device")
+        delivered = exchange(self.base, "POST", "/device/poll", report())[1]["command"]
+        exchange(self.base, "POST", "/device/poll", report(ack_id=delivered["id"], output="on"))
+        thread.join(2)
+        self.assertEqual(result[0][0], 200)
+        for e in self.events():
+            self.assertNotIn("<script>", e["detail"])
+            self.assertNotIn(self.token, e["detail"])
+
+    def test_rate_limited_commands_appear_in_events(self):
+        actor = DeviceActor(self.base).start()
+        try:
+            limit = self.gateway.fx["command_rate_limit"]["max"]
+            for i in range(limit):
+                code = exchange(self.base, "POST", "/api/command",
+                                {"action": "led_on" if i % 2 else "led_off"}, self.token)[0]
+                self.assertEqual(code, 200)
+            self.assert_logged_once(
+                lambda: exchange(self.base, "POST", "/api/command", {"action": "led_on"}, self.token)[0],
+                429, "rate_limit", "alert", "command rate limit exceeded")
+        finally:
+            actor.close()
+
+    def test_delivery_failures_name_the_command(self):
+        exchange(self.base, "POST", "/device/poll", report())
+        thread, result = self.begin_command()
+        before = max(e["seq"] for e in self.events())
+        thread.join(2)  # never delivered: the device stops polling
+        self.assertEqual(result[0][0], 502)
+        self.assertIn(("command", "alert", "led_on not delivered: device stopped polling"),
+                      [(e["type"], e["outcome"], e["detail"]) for e in self.events() if e["seq"] > before])
+        exchange(self.base, "POST", "/device/poll", report())
+        thread, result = self.begin_command("led_off")
+        exchange(self.base, "POST", "/device/poll", report())  # delivered, never acknowledged
+        thread.join(2)
+        self.assertEqual(result[0][0], 504)
+        self.assertIn(("command", "alert", "led_off unconfirmed: no device acknowledgement"),
+                      [(e["type"], e["outcome"], e["detail"]) for e in self.events()])
+
+    def test_malformed_login_requests_appear_in_events(self):
+        login = lambda data: (lambda: raw_post(self.base, "/api/login", data)[0])
+        self.assert_logged_once(login(b"{broken"), 400, "auth", "denied", "malformed login request rejected")
+        self.assert_logged_once(login(b'{"username": 1, "password": "x"}'), 400,
+                                "auth", "denied", "malformed login request rejected")
 
     def test_declared_api_versions_agree(self):
         import re
