@@ -182,6 +182,30 @@ Reads the bounded event log, newest first. Both query parameters are optional.
 `detail` is human-readable text. It must **never** contain a password, a
 session token, or any other secret (R2).
 
+In PC mode every refused or failed browser request writes exactly one event, so
+blocked attempts are visible (R5). Details name only the validated action;
+client-supplied values are never echoed.
+
+| Request outcome | type / outcome | detail |
+|---|---|---|
+| Missing or invalid session | auth / denied | `request with missing or invalid session` |
+| Wrong credentials, lockout | auth / denied, rate_limit / alert | `login failed (n/max)`, `login attempt during lockout`, `login locked out for Ns` |
+| Malformed or oversized login body | auth / denied | `malformed login request rejected` / `oversized login request rejected` |
+| Malformed or oversized command body | command / denied | `malformed command request rejected` / `oversized command request rejected` |
+| Unknown action or extra fields | command / denied | `invalid action rejected` |
+| Command rate limit | rate_limit / alert | `command rate limit exceeded` |
+| Another command in flight | command / denied | `<action> rejected: previous command still awaiting device` |
+| Device not reporting | command / denied | `<action> rejected: device unreachable` |
+| Admitted, never delivered | command / alert | `<action> not delivered: device stopped polling` |
+| Delivered, no acknowledgement | command / alert | `<action> unconfirmed: no device acknowledgement` |
+| Device reported failure | command / alert | `<action> failed: device reported output <on/off>` |
+| Confirmed | command / allowed | `<action> confirmed by device` |
+
+`503 server_busy` refusals are not logged per request: under overload that would
+evict earlier events from the bounded log. The log holds the newest
+`event_log_capacity` entries (200 by default), so a sustained flood of refused
+requests can still push older events out.
+
 ---
 
 ## 3. Common errors (all endpoints)

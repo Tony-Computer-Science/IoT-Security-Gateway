@@ -69,22 +69,42 @@ class DeviceGateway(MockGateway):
             self._refresh()
         return super().events_list(auth, query)
 
+    def login(self, body):
+        try:
+            return super().login(body)
+        except ApiError as error:
+            # The base class logs credential failures and lockouts itself;
+            # a malformed request body is the one rejection it leaves silent.
+            if error.status == 400:
+                with self.lock:
+                    self._log("auth", "denied", "malformed login request rejected")
+            raise
+
     def command(self, auth, body):
+        # Every refusal below logs exactly one event before raising, so the
+        # Events view shows each blocked attempt (R5). Details name only the
+        # validated action, never client-supplied values.
         with self.changed:
             self._require_session(auth)
             if (not isinstance(body, dict) or set(body) != {"action"}
                     or not isinstance(body["action"], str) or body["action"] not in ACTIONS):
+                self._log("command", "denied", "invalid action rejected")
                 raise ApiError(400, "invalid_action")
+            action = body["action"]
             now = time.monotonic()
             rate = self.fx["command_rate_limit"]
             while self.command_times and now - self.command_times[0] >= rate["window_s"]:
                 self.command_times.popleft()
             if len(self.command_times) >= rate["max"]:
+                self._log("rate_limit", "alert", "command rate limit exceeded")
                 raise ApiError(429, "rate_limited", retry_after=max(
                     1, math.ceil(rate["window_s"] - (now - self.command_times[0]))))
             if self.pending is not None:
+                self._log("command", "denied",
+                          "%s rejected: previous command still awaiting device" % action)
                 raise ApiError(429, "rate_limited", retry_after=1)
             if not self._refresh():
+                self._log("command", "denied", "%s rejected: device unreachable" % action)
                 raise ApiError(502, "target_unreachable")
             self.command_times.append(now)
             pending = {"id": secrets.token_hex(16), "action": body["action"],
@@ -114,9 +134,12 @@ class DeviceGateway(MockGateway):
                 raise ApiError(502, "command_failed", output=pending["output"])
             # Delivered commands may have changed the LED even if the ACK was
             # lost. Do not represent that uncertainty as an unchanged output.
-            self._log("target", "alert", "device command confirmation unavailable")
             if pending["delivered"]:
+                self._log("command", "alert", "%s unconfirmed: no device acknowledgement"
+                          % pending["action"])
                 raise ApiError(504, "command_unconfirmed")
+            self._log("command", "alert", "%s not delivered: device stopped polling"
+                      % pending["action"])
             raise ApiError(502, "target_unreachable")
 
     def poll(self, body):
@@ -164,6 +187,21 @@ class DeviceGateway(MockGateway):
 
 class DeviceHandler(Handler):
     server_version = "gateway-device-ui/" + API_VERSION
+    # Browser endpoints whose unreadable bodies are logged as blocked attempts.
+    BODY_REJECTION_EVENTS = {"/api/command": "command", "/api/login": "auth"}
+
+    def json_body(self):
+        try:
+            return super().json_body()
+        except ApiError as error:
+            path = urlsplit(self.path).path
+            kind = self.BODY_REJECTION_EVENTS.get(path)
+            if kind is not None:
+                reason = "oversized" if error.status == 413 else "malformed"
+                with self.gateway.lock:
+                    self.gateway._log(kind, "denied", "%s %s request rejected"
+                                      % (reason, "login" if kind == "auth" else "command"))
+            raise
 
     def setup(self):
         super().setup()
