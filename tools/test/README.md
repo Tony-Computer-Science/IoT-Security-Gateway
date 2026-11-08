@@ -19,8 +19,12 @@ in a restricted environment, prefix either C runner with
 
 ## Board C and PC service
 
-Build `firmware/target-device` with ESP-IDF 6.1 first to obtain its pinned
-managed cJSON dependency, then run from the repository root:
+The required `bash ci/run.sh` also runs eight browser-client tests with
+Node 18+, the target parser and asset validation alongside the HTTP suite.
+
+Run from the repository root. The target parser runner uses and verifies
+managed cJSON from an ESP-IDF build when available; otherwise it downloads
+the pinned archive and verifies its SHA-256 hashes:
 
 ```sh
 ASAN_OPTIONS=detect_leaks=0 python3 tools/test/run_target_tests.py
@@ -32,8 +36,8 @@ python3 web/scripts/build.py
 - `run_target_tests.py` compiles the exact firmware report encoder/response
   parser and pinned cJSON with ASan/UBSan. It covers truncated/oversized JSON,
   nesting, escapes, duplicates, unknown actions, invalid IDs and report bounds.
-  Requires a C compiler and the downloaded managed dependency.
-- `test_device_server.py` runs fifteen stdlib tests against the real PC HTTP
+  Requires a C compiler; a first run without managed cJSON needs network access.
+- `test_device_server.py` runs eighteen stdlib tests against the real PC HTTP
   service with a protocol-level device actor. It checks login/logout, LED
   on/off confirmation, missing/wrong acknowledgements, device/PC restarts,
   stale heartbeats, command contention, malformed requests and event logging.

@@ -1,4 +1,4 @@
-// REST client for docs/api-contract.md v0.3.1.
+// REST client for docs/api-contract.md v0.3.2.
 //
 // Rules for this module:
 //   - One exported function per endpoint.
@@ -9,7 +9,7 @@
 //     written to localStorage, sessionStorage, cookies, or the URL (R2).
 //   - Uses relative paths only. No scheme, host, or port.
 
-export const API_VERSION = '0.3.1';
+export const API_VERSION = '0.3.2';
 
 const REQUEST_TIMEOUT_MS = 8000;
 
@@ -31,6 +31,8 @@ export const ErrorCode = Object.freeze({
   RATE_LIMITED: 'rate_limited',
   TARGET_UNREACHABLE: 'target_unreachable',
   COMMAND_UNCONFIRMED: 'command_unconfirmed',
+  COMMAND_FAILED: 'command_failed', // device answered: it did not reach the requested state
+  SERVER_BUSY: 'server_busy', // API service refused the request before handling it
   LINK_DOWN: 'link_down',
   NETWORK: 'network_error', // fetch failed: gateway unreachable
   TIMEOUT: 'timeout', // no response within REQUEST_TIMEOUT_MS
@@ -65,6 +67,8 @@ export class ApiError extends Error {
     this.retryAfter = typeof body.retry_after === 'number' ? body.retry_after : null;
     this.attemptsRemaining =
       typeof body.attempts_remaining === 'number' ? body.attempts_remaining : null;
+    // Latest output the device reported alongside a command_failed answer.
+    this.reportedOutput = body.output === 'on' || body.output === 'off' ? body.output : null;
   }
 }
 

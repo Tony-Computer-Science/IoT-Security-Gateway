@@ -94,9 +94,11 @@ confirms only the matching delivered ID on the matching boot,
 with ack_ok=true and the requested output. Mere command delivery is not success.
 
 The browser command waits up to five seconds. If never delivered, it returns
-502 `target_unreachable`. If delivered but unconfirmed, failed, or invalidated
-by a device restart, it returns 504 `command_unconfirmed`. Its physical result
-may be unknown. Expired commands are removed; new polls do not fetch them.
+502 `target_unreachable`. If the device acknowledges that exact ID but reports
+ack_ok=false or a different output, it returns 502 `command_failed` with the
+reported output. If delivered but never acknowledged, or invalidated by a device
+restart, it returns 504 `command_unconfirmed`. In both cases the physical result
+is not optically verified. Expired commands are removed; new polls do not fetch them.
 Do not auto-retry ambiguous commands. Status polls reconcile later reports.
 
 The PC marks the target/channel unavailable eight seconds after the last

@@ -121,7 +121,7 @@ not rewritten to make the new router appear compliant.
 | R7 restart handling | Session invalidation and closed data paths are implemented; C6 UART peer-restart checks passed. SPI/full hardware acceptance remains pending. Local Board C control does not require the A/B link. |
 
 The [SPI 0.2.0 contract](spi-protocol.md) supersedes the draft command protocol.
-The [REST API 0.3.1](api-contract.md) is served by the PC, not A or B, and
+The [REST API 0.3.2](api-contract.md) is served by the PC, not A or B, and
 documents unknown command results when a delivered command lacks confirmation.
 PCB signal routing remains valid, but its A-uplink/B-IoT-AP labels reflect the
 old architecture and must be revised before fabrication.

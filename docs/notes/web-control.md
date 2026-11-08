@@ -20,8 +20,8 @@ to the user's last click.
 
 Many apps change the screen the moment you click, then fix it if the request
 fails. This view does not. The LED row changes only when the gateway answers
-with the target's real state: a successful command response, or a status
-update. While a command is on its way, the view shows a "Sending" message and
+with a device-reported state: a successful command response, a status
+update, or the reported output on an acknowledged `command_failed` response. While a command is on its way, the view shows a "Sending" message and
 the LED row keeps its old value.
 
 For example, if the user clicks "Turn on" while Board C loses Wi-Fi, an
@@ -82,3 +82,8 @@ report separately from API service uptime and last confirmed command history.
 Failed status refreshes retain these values with a stale label and disable
 commands until fresh status returns. Device restarts reset ESP uptime; history
 survives device restarts and clears when the service restarts.
+
+An exact negative device acknowledgement is 502 `command_failed`, distinct
+from a missing acknowledgement (504). The UI can show the accompanying reported
+output without claiming optical confirmation. A 503 `server_busy` means the
+service rejected the browser request for capacity; it is not an A/B link failure.

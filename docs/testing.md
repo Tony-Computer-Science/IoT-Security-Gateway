@@ -2,7 +2,16 @@
 
 ## Local software checks
 
-Run from the repository root with Python 3.9 or later:
+Run the required suite from the repository root with Python 3.9+, Node 18+
+and a C compiler with ASan/UBSan:
+
+```sh
+bash ci/run.sh
+```
+
+It runs service and browser-client tests, the pinned firmware parser and web
+asset checks. Also run the gateway protocol/policy/UART tests (not included
+in that service-focused CI script). Individual entrypoints are:
 
 ```sh
 python3 tools/test/run_host_tests.py
@@ -19,7 +28,7 @@ network-order status, subnet overlap, every readiness combination, source
 spoofing, truncated L4 headers, direct-route bypass policy, multiple client
 addresses and bounded UART encoding/overflow/resynchronization.
 
-`test_device_server.py` runs fifteen tests against the real PC HTTP service on a
+`test_device_server.py` runs eighteen tests against the real PC HTTP service on a
 temporary loopback port, using a simulated Board C. It checks browser sessions,
 command confirmation, timeouts, invalid messages, heartbeat expiry, concurrent
 commands and restart recovery. It needs permission to bind a local port, but
@@ -29,8 +38,8 @@ does not change Wi-Fi settings or require physical boards.
 gzipped budget. The PC service serves `web/src/` directly; generated assets
 are not a deployment prerequisite.
 
-For Board C's portable parser tests, first build `firmware/target-device`
-with ESP-IDF 6.1 to install its pinned managed cJSON dependency, then run:
+Board C's parser runner verifies managed cJSON from an ESP-IDF build when
+available; otherwise it downloads and hash-verifies the pinned archive. Run:
 
 ```sh
 python3 tools/test/run_target_tests.py
@@ -62,20 +71,24 @@ sdkconfig, so configure credentials afterward. See the [firmware index](../firmw
 
 The PR #6 integration preserves main's events/theme/live-monitoring behavior
 and S3 support alongside the A/B router and fixed-IP PC service. The browser
-API is 0.3.1; the device wire protocol remains 0.1.0. The PC serves the UI/API
+API is 0.3.2; the device wire protocol remains 0.1.0. The PC serves the UI/API
 at **192.168.78.10:8000**; no UI is served by an ESP32.
 
 | Check | Result |
 |---|---|
-| Required `bash ci/run.sh` | PASS; 15 real-service HTTP tests and frontend asset checks |
+| Required `bash ci/run.sh` | PASS; 18 real-service HTTP tests, 8 browser-client tests, sanitized parser and frontend asset checks |
 | Shared gateway protocol/policy/UART and target parser | PASS with ASan/UBSan; leak detection disabled |
 | Browser API evaluation suite | PASS; 19/19 scripts against a temporary mock |
 | Saved Postman collection | PASS; 12 requests / 23 assertions against the real local service and device actor |
 | JavaScript and legacy packer syntax | PASS |
-| Web asset size | PASS; 13,179 / 61,440 bytes gzipped (21.5%) |
+| Web asset size | PASS; 13,348 / 61,440 bytes gzipped (21.7%) |
 | Board C C6 and S3 firmware builds | PASS; isolated ESP-IDF 6.1 builds using compile-only settings |
 | Gateway firmware builds | PASS; C6 station/bridge with UART and nonempty compile-only credentials, S3 SPI test host |
 | Documentation integrity | PASS; 188 local links/anchors across 44 documents, no conflict markers or whitespace errors |
+
+The later main update at `b90cd41` adds distinct reported-command failures,
+reserved device worker capacity and expanded CI tests; those checks were rerun
+before the follow-up push. Firmware sources did not change after the five builds.
 
 Physical hardware tests were not repeated during conflict resolution. S3 bench
 results and C6 UART router results are separate dated records, not proof of

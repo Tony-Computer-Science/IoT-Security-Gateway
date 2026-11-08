@@ -1,6 +1,6 @@
 # REST API contract
 
-**Version: 0.3.1**
+**Version: 0.3.2**
 
 This is the interface between the web interface (`web/`) and the **separate
 web service**, hosted outside the ESP32 boards. For simplicity, the demo runs
@@ -135,8 +135,10 @@ Request:
 | 403 | `{ "error": "not_permitted" }` | Well-formed command refused by policy. |
 | 429 | `{ "error": "rate_limited", "retry_after": number }` | Command rate limit exceeded. |
 | 502 | `{ "error": "target_unreachable" }` | Target heartbeat is stale, or the pending command was never delivered to the device. |
+| 502 | `{ "error": "command_failed", "output": "on" \| "off" }` | PC mode: the device acknowledged this exact command but reported a failure or a different output. `output` is the device's latest report. |
+| 503 | `{ "error": "server_busy", "retry_after": 1 }` | PC mode: browser/API worker slots are full; the request was not handled. Applies to every non-device endpoint. |
 | 503 | `{ "error": "link_down" }` | Standalone mock's injected link failure; not emitted by the current real-device service. |
-| 504 | `{ "error": "command_unconfirmed" }` | PC mode delivered a command but could not confirm its result, or the device reported an actuator failure. The state may have changed. |
+| 504 | `{ "error": "command_unconfirmed" }` | PC mode delivered a command but received no matching acknowledgement (timeout or device restart). The state may have changed. |
 
 Admission failures and commands that were never delivered do not apply a
 state change. A **504**, client/network timeout, or lost response after
@@ -235,6 +237,16 @@ are current lab service limits, not firmware-wide security guarantees.
 ---
 
 ## 5. Changelog
+
+### 0.3.2 — distinct device failures and reserved device capacity
+
+- Add 502 `command_failed` when the device acknowledges a command but reports
+  failure or a different output; 504 `command_unconfirmed` now means only that
+  no matching acknowledgement arrived.
+- Add 503 `server_busy`: in PC mode, browser/API requests may use at most
+  `total - device` worker slots (default 16 of 24), so they cannot block device
+  polls. A slow-header flood before the request line is not addressed.
+- Align the browser client's declared version with the service and mock.
 
 ### 0.3.1 — live monitoring details
 

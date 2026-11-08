@@ -2,7 +2,7 @@
 
 A development stand-in for the separate web service and its IoT target.
 It implements every endpoint in
-[docs/api-contract.md](../../docs/api-contract.md) (v0.3.1) with real behavior,
+[docs/api-contract.md](../../docs/api-contract.md) (v0.3.2) with real behavior,
 and serves `web/src` from the **same port**, so there is no CORS. Python 3
 standard library only.
 

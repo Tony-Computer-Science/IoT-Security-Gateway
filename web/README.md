@@ -65,9 +65,12 @@ Build and flash [Board C](../firmware/target-device/README.md) with the station
 AP credentials and the same PC address/port. Its Wi-Fi requests carry state
 reports and receive `led_on` / `led_off` commands. The PC returns browser
 success only after a matching device acknowledgement. Unconfirmed delivered
-commands return 504; the UI keeps the last confirmed output and reconciles
+commands return 504; acknowledged driver failures return 502 `command_failed`
+with the latest device-reported output. The UI keeps reported output and reconciles
 later reports instead of retrying automatically. Heartbeats expire after
 eight seconds. A command waits up to five seconds, with one command in flight.
+The service reserves worker capacity for device polls; excess browser/API
+requests return 503 `server_busy` with a retry hint.
 
 One IoT target is supported. The PC service disables all `/__mock/` routes.
 Its device channel is intentionally unauthenticated plain HTTP on the lab

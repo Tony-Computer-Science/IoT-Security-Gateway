@@ -78,8 +78,9 @@ Board C is a separate Wi-Fi client application and does not use the gateway
 SPI/UART driver. Its single polling task owns the HTTP response buffer, last
 command acknowledgement and LED state. The PC service admits one pending
 command at a time using a condition variable on its state lock, waits up to
-five seconds for confirmation, and limits HTTP handling to 16 concurrent
-connections with six-second socket timeouts. Its heartbeat deadline is eight
+five seconds for confirmation, and limits HTTP handling to 24 concurrent
+connections with six-second socket timeouts. Browser/API requests can use
+only 16 slots, reserving eight slots for device traffic. Its heartbeat deadline is eight
 seconds. See [device lifecycle and limits](device-api.md).
 
 ## Development checks
@@ -99,8 +100,9 @@ defaults can allow the compiler to discard optional paths.
 After Board C changes, build `firmware/target-device` for C6 and S3 (with a verified LED pin) and run
 `python3 tools/test/run_target_tests.py`. For service changes, run
 `python3 tools/test/test_device_server.py` and, when Postman is installed,
-`python3 tools/test/run_device_api_tests.py`. The target parser runner needs
-the managed cJSON installed by the firmware build. See [the complete local
+`python3 tools/test/run_device_api_tests.py`. The target parser runner verifies
+managed cJSON from the firmware build, or downloads and hash-verifies the pinned
+archive when it is absent. See [the complete local
 check procedure](testing.md#local-software-checks).
 
 The root `.clang-format` defines the C style. Use clang-format 21 or newer on

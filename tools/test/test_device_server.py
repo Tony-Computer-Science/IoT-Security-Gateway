@@ -209,7 +209,63 @@ class DeviceServerTests(unittest.TestCase):
         self.assertTrue(thread.is_alive())
         exchange(self.base, "POST", "/device/poll", report(ack_id=command["id"], output="off"))
         thread.join(2)
-        self.assertEqual(result[0][0], 504)
+        # The device answered this command with the wrong state: a known failure.
+        self.assertEqual(result[0], (502, {"error": "command_failed", "output": "off"}))
+
+    def test_device_reported_failure_is_distinct_from_unconfirmed(self):
+        exchange(self.base, "POST", "/device/poll", report())
+        thread, result = self.begin_command()
+        command = exchange(self.base, "POST", "/device/poll", report())[1]["command"]
+        failed = report(ack_id=command["id"], ack_ok=False, output="off")
+        self.assertEqual(exchange(self.base, "POST", "/device/poll", failed)[1], {"command": None})
+        thread.join(2)
+        self.assertEqual(result[0], (502, {"error": "command_failed", "output": "off"}))
+        self.assertIsNone(self.status()[1]["last_confirmed_command"])
+        events = exchange(self.base, "GET", "/api/events", token=self.token)[1]["events"]
+        self.assertTrue(any(e["type"] == "command" and e["outcome"] == "alert"
+                            and "device reported output off" in e["detail"] for e in events))
+        # The next command is admitted normally; a failure leaves nothing pending.
+        thread, result = self.begin_command("led_off")
+        command = exchange(self.base, "POST", "/device/poll", report())[1]["command"]
+        exchange(self.base, "POST", "/device/poll", report(ack_id=command["id"]))
+        thread.join(2)
+        self.assertEqual(result[0], (200, {"result": "ok", "output": "off"}))
+
+    def test_browser_traffic_cannot_take_device_slots(self):
+        server = DeviceHTTPServer(("127.0.0.1", 0), self.handler, total_slots=3, device_slots=2)
+        worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": .01}, daemon=True)
+        worker.start()
+        base = "http://127.0.0.1:%d" % server.server_port
+        try:
+            exchange(base, "POST", "/device/poll", report())
+            result = []
+            command = threading.Thread(target=lambda: result.append(exchange(
+                base, "POST", "/api/command", {"action": "led_on"}, self.token)))
+            command.start()  # holds the only browser slot while awaiting the device
+            with self.gateway.changed:
+                self.assertTrue(self.gateway.changed.wait_for(lambda: self.gateway.pending is not None, 1))
+            self.assertEqual(exchange(base, "GET", "/api/status", token=self.token),
+                             (503, {"error": "server_busy", "retry_after": 1}))
+            delivered = exchange(base, "POST", "/device/poll", report())
+            self.assertEqual(delivered[0], 200)
+            exchange(base, "POST", "/device/poll", report(ack_id=delivered[1]["command"]["id"], output="on"))
+            command.join(2)
+            self.assertEqual(result[0], (200, {"result": "ok", "output": "on"}))
+            self.assertEqual(exchange(base, "GET", "/api/status", token=self.token)[0], 200)
+        finally:
+            server.shutdown()
+            server.server_close()
+            worker.join(2)
+        with self.assertRaises(ValueError):
+            DeviceHTTPServer(("127.0.0.1", 0), self.handler, total_slots=2, device_slots=2)
+
+    def test_declared_api_versions_agree(self):
+        import re
+        from web.mock.server import API_VERSION
+        contract = re.search(r"\*\*Version: ([0-9.]+)\*\*", (ROOT / "docs/api-contract.md").read_text())
+        client = re.search(r"export const API_VERSION = '([0-9.]+)';", (ROOT / "web/src/api.js").read_text())
+        self.assertEqual({contract.group(1), client.group(1), API_VERSION}, {API_VERSION})
+        self.assertEqual(DeviceHandler.server_version, "gateway-device-ui/" + API_VERSION)
 
     def test_one_inflight_command_and_no_session_bypass(self):
         exchange(self.base, "POST", "/device/poll", report())

@@ -13,7 +13,8 @@ JavaScript and a Python asset build, with no runtime framework or dependencies.
 Keep Wi-Fi credentials, sdkconfig, firmware containing credentials and full-flash
 backups private. Confirm the carrier's LED pin before flashing an S3.
 
-Run `bash ci/run.sh` for portable tests and asset validation. Build each affected
-chip target with ESP-IDF 6.1 and run `python3 tools/test/run_target_tests.py`
-after managed dependencies are installed. Software tests do not establish
+Run `bash ci/run.sh` for portable tests and asset validation: service tests,
+browser client tests (Node 18+), the firmware parser with sanitizers (it fetches
+pinned cJSON if no ESP-IDF build has installed it) and the web build. Build each
+affected chip target with ESP-IDF 6.1. Software tests do not establish
 hardware or gateway-isolation acceptance; record those observations separately.
