@@ -8,7 +8,7 @@ CONFIG_IDF_TARGET="esp32s3"
 # N8 / N16 / N32 modules). 4 MB is a safe lower bound that fits partitions.csv.
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
-# Custom partition table with a LittleFS partition for web assets.
+# Custom partition table retaining an unused legacy LittleFS partition.
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
@@ -26,4 +26,5 @@ CONFIG_LWIP_DHCPS=y
 CONFIG_LWIP_DHCPS_LEASE_UNIT=60
 CONFIG_LWIP_DHCPS_MAX_STATION_NUM=10
 
-# The www partition is retained for later UI work; no HTTP service is started.
+# The legacy www partition is unmounted and unused. The UI/API runs on a
+# separate server (the fixed-IP PC in the demo), not on this board.

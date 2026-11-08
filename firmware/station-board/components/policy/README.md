@@ -10,14 +10,16 @@ web service outside the boards. See
 ## Current owner (provisional)
 
 Lal Za Lian. Any member may work here; the current owner reviews. Reassign by
-updating this section and `.github/CODEOWNERS` in the same PR.
+updating this section and any CODEOWNERS file added later in the same PR.
 
 ## Status
 
 Unused stub. `policy_init()` returns `ESP_ERR_NOT_SUPPORTED`. The retained
 historical API is in `include/policy.h`.
 
-## Notes
+## Historical design notes
+
+These describe the former proposal, not implemented firmware behavior.
 
 - Limits must be configurable (Kconfig suggested). The values are TODO, see API contract Q4.
 - Rejection must happen before anything is sent over SPI, so rejected requests leave the target unchanged (R6).

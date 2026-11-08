@@ -1,10 +1,11 @@
 # Contributing
 
-## GitHub usernames: fill these in first
+## Provisional ownership and GitHub usernames
 
-[.github/CODEOWNERS](.github/CODEOWNERS) uses placeholder handles. Once you
-know each member's GitHub username, replace every placeholder below in **both**
-this table and CODEOWNERS in one pass (`grep -rn "@TODO-" .`).
+Directory READMEs record provisional owners. This checkout has no
+`.github/CODEOWNERS` file or pull request template; request owner reviews
+manually. Once the team confirms assignments and GitHub usernames, update
+the roster below and create CODEOWNERS if automatic review routing is wanted.
 
 | Member | Placeholder | Real username |
 |---|---|---|
@@ -24,11 +25,9 @@ and swap it in for that member's placeholder.
 - The current owner of an area should review changes to that area (see
   [Pull requests](#pull-requests)).
 - Assignments will change as the project goes on. To record a reassignment,
-  update `.github/CODEOWNERS` **and** the affected directory README's
-  "Current owner (provisional)" section in the same pull request.
-- The CODEOWNERS rules are commented out for now so they can't auto-block
-  PRs. Uncomment them once the team has confirmed assignments.
-- Owner names go in READMEs and CODEOWNERS only, never in source files or
+  update the affected directory README's "Current owner (provisional)"
+  section in the same pull request. Keep CODEOWNERS in sync if it is added.
+- Owner names go in READMEs and any future CODEOWNERS file, never in source files or
   CMakeLists. Code comments describe what a component does, not who writes it.
 
 ## Branching
@@ -105,24 +104,38 @@ When a commit implements or affects a requirement, name it in the body, e.g.
    several areas, every affected owner reviews.
 3. **No direct pushes to `main`.**
 4. **Never merge a PR that breaks the build.** Before requesting review:
-   - firmware: `idf.py build` passes for every board you touched;
+   - firmware: `idf.py build` passes for every project you touched; shared
+     gateway changes also require A, B and the S3 test-host builds plus
+     `python3 tools/test/run_host_tests.py`;
+   - Board C protocol: build `target-device`, then run
+     `python3 tools/test/run_target_tests.py` against its managed cJSON;
+   - PC service: `python3 tools/test/test_device_server.py` passes; run
+     `python3 tools/test/run_device_api_tests.py` too when Postman is available;
    - web: `python3 web/scripts/build.py` passes (it fails when the 60 KB
      budget is exceeded or a forbidden API is used);
    - docs: links resolve.
-5. Fill in the PR template, including the requirements (R1–R7) the PR affects.
+5. Describe the behavior changed and validation performed in the PR body,
+   including the requirements (R1–R7) affected and any remaining limitations.
 6. Prefer squash-merge for topic branches so `main` history reads as one line
    per change.
 
 ### Changes to shared contracts
 
 [docs/api-contract.md](docs/api-contract.md) (browser ↔ separate web service) and
-[docs/spi-protocol.md](docs/spi-protocol.md) (Board A ↔ Board B) are each
-implemented by more than one person. A PR that changes either one must:
+[docs/device-api.md](docs/device-api.md) (PC service ↔ Board C), plus the
+[SPI](docs/spi-protocol.md) and [UART](docs/uart-link.md) contracts (A ↔ B),
+are shared interfaces. A PR that changes wire or API behavior must:
 
 - bump the version and add a changelog entry;
 - be reviewed by the owners on **both** sides of the interface;
 - update the mock server (`web/mock/`) in the same PR when the REST contract
-  changes.
+  changes, and update the real service, affected firmware/frontend and tests.
+
+Documentation corrections that describe existing behavior do not change the
+interface version. Keep build/host-test evidence distinct from physical
+acceptance; follow [the test guide](docs/testing.md). The original R1–R7 text
+is preserved in [requirements.md](docs/requirements.md); the router milestone's
+differences must stay explicit in [architecture.md](docs/architecture.md).
 
 ### Recommended repository settings (TODO for the project lead)
 

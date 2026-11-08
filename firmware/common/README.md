@@ -6,6 +6,13 @@
 - `gateway_link`: ESP-IDF 6.1 Ethernet netif with selectable full-duplex SPI or UART. Compiles
   as peripheral for B and controller for production A or the separate test host. Eight TX
   packets, eight RX buffers, two DMA buffers; no PSRAM dependency.
+- `board_led`: optional addressable RGB identity LED for production A/B.
+  Enabled by default on C6, GPIO8; A is blue and B is red. It identifies the
+  firmware role, not network readiness. Disabled by default on S3.
+- `gateway_diagnostics`: optional packet counters and one-time DNS/HTTP HEAD
+  probe after forwarding becomes ready. Enabled through `GW_LINK_DIAGNOSTICS`
+  on production A/B; disabled in tracked defaults. The probe does not test
+  browser authentication or Board C command confirmation.
 
 `gateway_link_set_netif_up(true)` brings up the netif but does not open the gate.
 The supervisor must establish routing/NAT first, then call

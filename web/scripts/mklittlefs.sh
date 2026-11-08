@@ -61,5 +61,4 @@ echo "  partition '$PARTITION_NAME': $SIZE_BYTES bytes, block $BLOCK_SIZE, page 
 
 mklittlefs -c "$DIST_DIR" -s "$SIZE_BYTES" -b "$BLOCK_SIZE" -p "$PAGE_SIZE" "$OUTPUT"
 
-echo "Done. Flash with:"
-echo "  parttool.py --port <PORT> write_partition --partition-name $PARTITION_NAME --input $OUTPUT"
+echo "Done. Legacy image only; the current UI runs on the server/PC and needs no asset flashing."

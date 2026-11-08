@@ -59,6 +59,12 @@ Under **Board C IoT device**, set:
 | Command polling interval | 500 ms by default |
 | Addressable RGB LED GPIO | 8 on the matching C6 DevKit board |
 
+The UI address and port are compiled into the device firmware as
+`TARGET_UI_HOST` / `TARGET_UI_PORT`; there is no automatic server discovery.
+The PC acts as the server at that fixed endpoint for this demo. If the UI/API
+is moved to a dedicated server at another address/port, change these settings,
+rebuild and reflash Board C. The UI assets stay on the server/PC.
+
 The first build downloads pinned `espressif/cjson` 1.7.19~2. On a machine with
 limited RAM, use `IDF_PY_BUILD_JOBS=2 idf.py build`. Flash only the third
 board's port; station and bridge keep their existing firmware. Both the
@@ -75,7 +81,8 @@ on a carrier board: confirm its GPIO if using a different development board.
   on the station AP, even without an internet connection.
 - Reports its last successfully driven output and confirms commands by ID.
   The website reports success only after a matching acknowledgement. Duplicate
-  delivery does not apply the same command twice during a device boot.
+  delivery of the most recently attempted command ID does not apply it twice;
+  the board keeps only that last ID, not a history of all commands.
 - Wi-Fi/HTTP outages retain the output and retry with bounded delays. New
   device boot IDs invalidate pending commands; expired work is not queued
   for later replay. A lost confirmation can leave an unknown result, which
@@ -88,8 +95,9 @@ login renewal and LED status after each recovery. Leave station/bridge UART
 wiring as it is. This completes a local Wi-Fi application test; the gateway's
 upstream routing is tested separately.
 
-The C6 firmware build, sanitized C response-parser tests, ten real-HTTP server
-tests, and twelve Postman requests / 23 assertions passed on 2026-11-05.
+The C6 firmware build passed on 2026-11-05. Sanitized C response-parser tests,
+ten real-HTTP server tests, and twelve Postman requests / 23 assertions were
+rerun successfully on 2026-11-08; see the [software validation record](../../docs/testing.md#recorded-local-software-validation--2026-11-08).
 The HTTP tests use a protocol-level device actor, not C6 hardware. This image
 has not yet been flashed onto the third board; its radio, LED and Windows
 integration still need the acceptance steps above.

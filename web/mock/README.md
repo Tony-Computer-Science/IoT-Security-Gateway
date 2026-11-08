@@ -37,8 +37,10 @@ MOCK_PASSWORD='dev-only-pass' python3 web/mock/server.py
 
 ## Simulated behavior
 
-Values come from [fixtures.json](fixtures.json). They are **not** the firmware's
-limits (see contract open question Q4).
+Values come from [fixtures.json](fixtures.json). The real PC service reuses
+the login/session, rate-limit, event-log and body-size settings, but derives
+reachability/output from Board C rather than `initial_state`. These are
+**not** firmware-wide limits (see contract open question Q4).
 
 | Behavior | Mock value |
 |---|---|
@@ -48,6 +50,11 @@ limits (see contract open question Q4).
 | Event log | ring buffer, `event_log_capacity` = 200 entries |
 | Max request body | `max_body_bytes` = 1024 → 413 |
 | Unknown `/api/` path / wrong method | 404 / 405 |
+
+The fifth consecutive failed login returns 401 with `attempts_remaining=0`
+and starts lockout; subsequent attempts during lockout return 429. The mock
+counts command attempts before checking their action/reachability; the real
+service counts admitted commands and additionally limits pending work to one.
 
 ## Using the API with curl
 

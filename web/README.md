@@ -54,6 +54,12 @@ password printed by the service, or set `UI_PASSWORD` in the environment
 before launch to choose one. No package installation or web build is needed.
 This password is separate from the Wi-Fi passphrase.
 
+Service options are `--host` (default `192.168.78.10`), `--port` (default
+`8000`), `--device-id` (default `iot-c6`) and `--quiet` (suppress request logs).
+Match the address, port and device ID in Board C's menuconfig. When
+`UI_PASSWORD` is set, startup prints `(from UI_PASSWORD)` instead of the
+password; sign in with the value you configured.
+
 Build and flash [Board C](../firmware/target-device/README.md) with the station
 AP credentials and the same PC address/port. Its Wi-Fi requests carry state
 reports and receive `led_on` / `led_off` commands. The PC returns browser
@@ -116,6 +122,11 @@ so no state relies on color alone:
 | `rate-limited` | ‖ | double | 429 `rate_limited`, `locked_out` |
 | `target-unreachable` | ⚠ | dotted | 502 |
 | `link-down` | ⨯ | double left bar, striped | 503 |
+
+In the real service, heartbeat expiry sets both availability fields false
+and uses the channel-unavailable style; it does not report A/B link health.
+A delivered command without confirmation returns 504 and an unknown-result
+message; the UI preserves the last reported output until a fresh report arrives.
 
 ## Remaining work
 

@@ -2,13 +2,20 @@
 
 - `run_host_tests.py`: compiles/runs the shared C protocol, sessions and packet
   policy with address/undefined-behavior sanitizers. Requires Python 3 and a C
-  compiler; standard library only. Run from any directory.
+  compiler with ASan/UBSan; standard library only. Run from any directory.
 - `test_gateway_protocol.c`: malformed-wire, CRC, session/reset, addressing and
   pre-NAT firewall regression cases.
 - `test_gateway_access.c`: production A's private subnet configuration, B status
   validation, DNS selection, offline DHCP/ping, source spoofing and NAT bypass.
+- `test_gateway_uart.c`: compact COBS envelope round trips, overflow,
+  truncation, stream resynchronization and inner CRC checks. Included in
+  `run_host_tests.py` alongside the protocol/access tests.
 - `echo_server.py --bind <lab-PC-IP> --port 9000`: TCP/UDP echo endpoint for
   the separate ESP32-S3 SPI host; at most eight TCP clients, bounded buffers.
+
+Python services and checks use Python 3.9+. If LeakSanitizer is unavailable
+in a restricted environment, prefix either C runner with
+`ASAN_OPTIONS=detect_leaks=0`; ASan/UBSan checks remain enabled.
 
 ## Board C and PC service
 
@@ -38,7 +45,8 @@ python3 web/scripts/build.py
   its private environment file, and disables run-result uploads. No Postman
   account or shared workspace is required for this local run.
 
-All four checks passed on 2026-11-05. HTTP evidence uses a stand-in device;
+See the [dated validation results](../../docs/testing.md#recorded-local-software-validation--2026-11-08)
+for the latest rerun. HTTP evidence uses a stand-in device;
 it does not test the firmware radio, RGB LED, Windows firewall or physical
 command path. Use [Board C acceptance steps](../../firmware/target-device/README.md#behavior-and-verification)
 for those. No passwords or generated run environments belong in Git.

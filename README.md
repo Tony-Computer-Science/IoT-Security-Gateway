@@ -10,16 +10,33 @@ Devices -> Board A: WPA2 AP -> SPI/UART -> Board B: Wi-Fi station -> Router -> I
 
 The board names remain **station-board (A)** and **bridge-board (B)** for
 repository compatibility. These names do not describe their new Wi-Fi modes:
-A is the access point; B is the upstream station.
+A is the access point; B is the upstream station. A third ESP32-C6 (Board C)
+joins A's AP and controls an RGB LED through a separate PC web service.
+
+## Repository guide
+
+| Path | Contents |
+|---|---|
+| [firmware/](firmware/README.md) | Gateway A/B images, Board C LED target, S3 SPI test host and shared components |
+| [web/](web/README.md) | Browser interface, real-device PC service and standalone development mock |
+| [hardware/](hardware/README.md) | S3 Rev A PCB and separate C6 SPI/UART wiring |
+| [docs/](docs/README.md) | Architecture, API/link contracts, client setup, maintenance and testing |
+| [tools/test/](tools/test/README.md) | Host protocol tests, HTTP tests, optional Postman checks and echo server |
+
+For local UI work without boards, run `python3 web/mock/server.py` and open
+the printed URL. The mock simulates the target; use the real-device service
+in the setup below for physical LED control.
 
 ## Setting Up
 
 The website and its API are a **separate service running outside the ESP32
 boards**. For simplicity, this demo runs that service on a local computer
-instead of a dedicated server. The computer joins **IoT-Gateway** and uses
-the fixed address **192.168.78.10**. Board C contacts it over Wi-Fi; station
-and bridge provide networking. Hosting the website on a board is not part
-of this setup.
+instead of a dedicated server: **the computer acts as the server**. It joins
+**IoT-Gateway** and serves the UI/API at **http://192.168.78.10:8000/**.
+Board C has that server IPv4 address and port **compiled into its firmware**
+from menuconfig (`TARGET_UI_HOST` / `TARGET_UI_PORT`); it does not discover
+the server automatically. Board C contacts it over Wi-Fi; station and bridge
+provide networking. No ESP32 hosts the website or browser API.
 
 Before the first run, build/configure and flash each board using the
 [station](firmware/station-board/README.md),
@@ -141,7 +158,14 @@ operator login printed by the service.
 
 ```sh
 python3 tools/test/run_host_tests.py
+python3 tools/test/test_device_server.py
+python3 web/scripts/build.py
 ```
+
+These local checks need Python 3.9+; protocol tests also need a C compiler
+with AddressSanitizer/UndefinedBehaviorSanitizer. Board C parser tests require
+its managed cJSON dependency, and the optional collection check requires the
+Postman CLI. See [all test commands and prerequisites](docs/testing.md#local-software-checks).
 
 ## Design and requirements
 

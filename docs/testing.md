@@ -2,24 +2,76 @@
 
 ## Local software checks
 
+Run from the repository root with Python 3.9 or later:
+
 ```sh
 python3 tools/test/run_host_tests.py
+python3 tools/test/test_device_server.py
+python3 web/scripts/build.py
 ```
 
-This builds the actual shared protocol/policy with C11, warnings as errors,
+The host protocol runner builds the actual shared protocol/policy with a C
+compiler supporting C11, warnings as errors,
 AddressSanitizer and UndefinedBehaviorSanitizer. It checks the standard CRC
 vector, corruption at every wire byte, malformed frames with recomputed CRCs,
 MTU/EtherTypes, handshake, duplicate/old sessions, exact timeout boundary,
 network-order status, subnet overlap, every readiness combination, source
-spoofing, truncated L4 headers and direct-route bypass policy.
+spoofing, truncated L4 headers, direct-route bypass policy, multiple client
+addresses and bounded UART encoding/overflow/resynchronization.
+
+`test_device_server.py` runs ten tests against the real PC HTTP service on a
+temporary loopback port, using a simulated Board C. It checks browser sessions,
+command confirmation, timeouts, invalid messages, heartbeat expiry, concurrent
+commands and restart recovery. It needs permission to bind a local port, but
+does not change Wi-Fi settings or require physical boards.
+
+`build.py` checks the frontend's forbidden APIs/external URLs and 60 KiB
+gzipped budget. The PC service serves `web/src/` directly; generated assets
+are not a deployment prerequisite.
+
+For Board C's portable parser tests, first build `firmware/target-device`
+with ESP-IDF 6.1 to install its pinned managed cJSON dependency, then run:
+
+```sh
+python3 tools/test/run_target_tests.py
+```
+
+If the Postman CLI is installed on PATH, also run:
+
+```sh
+python3 tools/test/run_device_api_tests.py
+```
+
+This optional harness runs the saved collection against the real local service
+and a simulated device: 12 requests / 23 assertions. It supplies temporary
+credentials, removes its environment file and disables result uploads. No
+Postman login or shared workspace is required. See [test tooling](../tools/test/README.md).
 
 LeakSanitizer cannot run under ptrace-based sandboxes. In that environment use
 `ASAN_OPTIONS=detect_leaks=0 python3 tools/test/run_host_tests.py`; address/UB
 checks still run. The tested portable codec/policy itself uses no heap.
+The same `ASAN_OPTIONS=detect_leaks=0` workaround applies to `run_target_tests.py`.
 
-Build `firmware/station-board`, `firmware/bridge-board` and `firmware/spi-test-host` with ESP-IDF 6.1
-and `idf.py set-target esp32s3` on initial configuration. Set-target resets
-sdkconfig, so configure credentials afterward. See each project's README.
+Build firmware with ESP-IDF 6.1. Production `station-board` and `bridge-board`
+support S3 or C6; `spi-test-host` supports S3 only; `target-device` supports
+C6 only. Choose the matching `idf.py set-target esp32s3` or
+`idf.py set-target esp32c6` on initial configuration. Set-target resets
+sdkconfig, so configure credentials afterward. See the [firmware index](../firmware/README.md).
+
+## Recorded local software validation — 2026-11-08
+
+| Check | Result |
+|---|---|
+| Shared gateway codec/session/policy/UART tests | PASS with ASan/UBSan; leak detection disabled |
+| Board C report encoder/response parser with managed cJSON | PASS with ASan/UBSan; leak detection disabled |
+| PC device service HTTP tests | PASS; 10 tests against the real service with a simulated device |
+| Saved Postman API collection | PASS; 12 requests / 23 assertions, zero failures, exit code 0; real local service with a simulated device |
+| Web asset build and constraints | PASS; 7,840 / 61,440 bytes gzipped (12.8%) |
+
+These are workstation software checks. Firmware builds and physical tests
+were not repeated for this documentation update; the dated records below
+and [Board C validation record](../firmware/target-device/README.md#behavior-and-verification)
+remain separate evidence.
 
 ## Recorded C6 UART validation — 2026-11-05
 
@@ -56,20 +108,21 @@ checks, not provisioned deployment images. At that validation point, no board
 was flashed or physically tested. See [maintenance](firmware-maintenance.md) for component ownership and
 the development workflow.
 
-Production A was initially checked using separate ignored build/configuration
-paths. The older normal `sdkconfig` and build cache still targeted ESP32 and
-caused a normal build failure. Those files have since been backed up under
-`firmware/station-board/local-backups/`, and the normal configuration migrated
-to ESP32-S3 while preserving gateway options. See
-[A's setup guide](../firmware/station-board/README.md) before configuring credentials
-and flashing.
+For an existing checkout with a mismatched build cache, follow
+[A's setup guide](../firmware/station-board/README.md#configure-and-build)
+before configuring credentials and flashing. Ignored local configurations
+and build caches are workstation-specific, not fresh-checkout defaults.
 
 ## Hardware acceptance — pending
 
-No attached boards were available during implementation. Record firmware
-revision, board/module variants, router/security mode, SPI clock, date, results
+Basic C6 UART connectivity and peer-restart checks passed on 2026-11-05, as
+recorded above. Full acceptance, including SPI electrical behavior and soak
+testing, remains pending. Record firmware revision, board/module variants,
+router/security mode, selected transport and clock/baud rate, date, results
 and log locations when running these checks. A compile or unit-test pass does
-not count as physical acceptance.
+not count as physical acceptance. The SPI pin row below is for S3/Rev A;
+use the [C6 pinout](../hardware/docs/README.md#esp32-c6-development-board-wiring)
+when testing SPI on C6.
 
 | Test | Expected result |
 |---|---|
@@ -101,14 +154,22 @@ logic analyzer or instrumented host/capture, then remove the temporary route.
 After an outbound echo connection, only matching reply traffic should return.
 Repeat during loss/recovery and after resetting either board.
 
-## Legacy web/target tests
+## Web and Board C acceptance — pending
 
-The existing `python3 web/mock/server.py` and `python3 web/scripts/build.py`
-continue to support the original LED-command interface. They do not exercise
-the new router. Application command authorization and per-device policy remain
-future work; WPA2 admission does not establish compliance with those requirements.
+For UI development without hardware, run `python3 web/mock/server.py` and use
+its [failure injection procedures](../web/mock/README.md#failure-injection).
+It simulates the target; it cannot establish real LED state or reproduce
+delivered-but-unconfirmed commands.
 
-## Production Board A acceptance — pending
+For the physical target, use `web/device_server.py` with Board C and the
+fixed-address PC. Follow [Board C's acceptance steps](../firmware/target-device/README.md#behavior-and-verification):
+confirm physical green/off output, availability after disconnect/reconnect,
+device restart and service restart. Browser login and command validation are
+implemented in the PC service. Device authentication, TLS and per-client
+network policy remain unimplemented; WPA2 admission does not establish
+compliance with the original security requirements.
+
+## Production Board A acceptance — partial C6 UART validation
 
 Flash `station-board` on A and `bridge-board` on B. The separate SPI test-host
 image does not host Wi-Fi. Use client devices on A's SSID and an echo server on

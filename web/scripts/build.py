@@ -5,8 +5,9 @@ Pure Python standard library. The minifiers are deliberately conservative:
 they strip comments and redundant whitespace but never rename or restructure
 code, so they cannot change behavior. gzip does the heavy lifting.
 
-Output: one <name>.gz per source file in web/dist/. Board A serves each file
-with `Content-Encoding: gzip` (see web/README.md).
+Output: one <name>.gz per source file in web/dist/ for asset-size checks.
+The separate server/PC service serves web/src/ directly; no ESP32 serves
+these files and no asset flashing is required (see web/README.md).
 
 Exit status is non-zero if:
   - the total gzipped size exceeds the 60 KB budget, or

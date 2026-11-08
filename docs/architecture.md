@@ -10,7 +10,7 @@ Board B: virtual Ethernet -> IPv4 NAPT -> personal Wi-Fi station
 Upstream LAN / internet
 ```
 
-Repository names remain station-board=A and bridge-board=B, but their planned
+Repository names remain station-board=A and bridge-board=B, but their current
 Wi-Fi roles are now A=AP and B=station. Production A provides AP/DHCP/NAT.
 The separate spi-test-host image stands in for A with its Wi-Fi radio disabled.
 The website/API is a separate service external to the ESP32 boards. For
@@ -26,6 +26,28 @@ The service PC is inside the protected AP in this demo; "external service"
 describes a process outside the boards, not unsolicited access from the
 upstream LAN. No website/API hosting on a board is required or planned for
 this setup. See the root [Setting Up guide](../README.md#setting-up).
+
+## UI hosting and fixed server endpoint
+
+The UI and browser/device APIs belong to a server process. A local PC acts
+as that server in the demo because no dedicated server is provisioned:
+
+```text
+Browser on PC/phone -> http://192.168.78.10:8000/ -> PC web service
+Board C            -> http://192.168.78.10:8000/device/poll -> same service
+```
+
+The PC is manually assigned **192.168.78.10/24** on A's AP; A excludes .10
+from its DHCP pool but does not assign it to the PC automatically. Board C's
+`TARGET_UI_HOST` and `TARGET_UI_PORT` settings default to **192.168.78.10**
+and **8000** and are compiled into its firmware. This is a fixed configured
+endpoint, not service discovery. A future dedicated server must be reachable
+at the device's configured address/port; changing that endpoint requires
+rebuilding and flashing Board C. The browser uses relative `/api/` URLs
+against whichever server served the page. None of the ESP32 images serves
+the UI or browser API.
+
+## Gateway link transport
 
 For tests with two signal wires plus common ground, both endpoints can select
 [UART test mode](uart-link.md) instead of SPI. It carries the same Ethernet
@@ -96,7 +118,7 @@ not rewritten to make the new router appear compliant.
 | R4 configurable request limits | Packet queues are bounded; the PC service reuses browser login/command limits and allows one pending target command. These are separate from router policy. |
 | R5 bounded authorized event log | The PC service exposes an authenticated bounded application log. Router link counters and serial diagnostics are separate; the UI events view is unfinished. |
 | R6 normal target output control | C6 LED control and PC command confirmation are implemented and tested locally; third-board hardware acceptance is pending. |
-| R7 restart handling | Session invalidation and closed data paths are implemented, but physical acceptance is pending. |
+| R7 restart handling | Session invalidation and closed data paths are implemented; C6 UART peer-restart checks passed. SPI/full hardware acceptance remains pending. Local Board C control does not require the A/B link. |
 
 The [SPI 0.2.0 contract](spi-protocol.md) supersedes the draft command protocol.
 The [REST API 0.2.0](api-contract.md) is served by the PC, not A or B, and

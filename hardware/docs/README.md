@@ -1,7 +1,9 @@
 # hardware/docs: pinout, wiring, bring-up
 
-The single source of truth for pin assignments. Firmware (`spi_host`,
-`spi_device`, target LED) must use the pins recorded here.
+Reference pin assignments for the shared `gateway_link` driver, A/B identity
+LEDs and Board C target LED. Match menuconfig settings to the applicable board
+and transport below; the Rev A S3 PCB and C6 development boards use different
+SPI pins.
 
 ## Current owner (provisional)
 
@@ -108,12 +110,13 @@ All other GPIOs are unconnected on the PCB.
 Board C uses Wi-Fi to IoT-Gateway and needs no signal wiring to A or B.
 See [Board C setup](../../firmware/target-device/README.md).
 
-## Wiring
+## Rev A / S3 SPI wiring
 
 - **PCB (Rev A):** the SPI and HS lines run about 75 mm between the modules on
   the top layer over a solid ground plane, with 33 Ω source termination at the
-  driving end. Routing is good to well above 10 MHz (it doesn't limit the link
-  below 40 MHz).
+  driving end and short L4 hops (see [design notes](../kicad/DESIGN_NOTES.md)).
+  The PCB has not been fabricated; electrical timing and operation at the
+  configured SPI clock still require physical validation.
 - **Breadboard demo:** wire GPIO*n* on Board A to GPIO*n* on Board B for each
   row of the table above (10, 11, 12, 13, 4), plus GND. Fit the pull-up on CS at
   Board B and the pull-down on HS at Board A (10 kΩ each) so the idle states
@@ -121,12 +124,16 @@ See [Board C setup](../../firmware/target-device/README.md).
 - TODO: wiring diagram (put the image in `docs/assets/` or here), wire lengths,
   connector type.
 
-## Bring-up checklist
+## SPI bring-up checklist — pending
 
-TODO, suggested steps:
+The C6 UART connectivity/restart results are recorded in
+[the UART guide](../../docs/uart-link.md#observed-hardware-checks-2026-11-05).
+They do not validate SPI timing or the unfabricated Rev A PCB. For SPI:
 
 1. Continuity check of every link wire, including GND.
 2. Logic-analyzer capture of SCLK/CS at the intended clock.
 3. Loopback test at low clock, then step up to the target clock.
 4. Handshake line timing.
 5. Behavior when one board is reset or the cable is unplugged (R7).
+
+Record results using the [hardware acceptance checklist](../../docs/testing.md#hardware-acceptance--pending).

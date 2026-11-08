@@ -8,6 +8,14 @@ serves both from the same origin. It never opens a
 connection to Board C. This adds no port forwarding through station/bridge.
 See [Setting Up](../README.md#setting-up) for startup order and LED checks.
 
+The demo PC acts as the server at a manually assigned fixed address. Board C
+has this address and port compiled into its firmware from `TARGET_UI_HOST`
+and `TARGET_UI_PORT` in menuconfig (defaults **192.168.78.10** / **8000**).
+There is no automatic server discovery. Moving the service to a dedicated
+server with a different endpoint requires rebuilding and flashing Board C
+with matching settings. The website and APIs remain on the server, never
+on an ESP32.
+
 Board C remains an intentionally vulnerable **lab-only plain-HTTP device**:
 this channel has no device authentication or TLS. Its public device ID is
 not a credential. AP peers can impersonate it; the browser's operator login
@@ -77,9 +85,11 @@ observed when it was admitted. Changing boot ID invalidates old pending work.
 There is no persistent replay queue after either side restarts.
 
 While a command is pending, polls return the same command ID until confirmed
-or timed out. The device applies each ID at most once within its current boot
-and includes that ID/result in subsequent polls, including after a lost ACK
-response. The PC confirms only the matching delivered ID on the matching boot,
+or timed out. The device remembers its **most recently attempted ID** and
+does not reapply consecutive deliveries of that ID, including after a lost
+ACK response. It reports that ID/result in subsequent polls. There is no
+history of earlier IDs or persistent deduplication across boots. The PC
+confirms only the matching delivered ID on the matching boot,
 with ack_ok=true and the requested output. Mere command delivery is not success.
 
 The browser command waits up to five seconds. If never delivered, it returns
@@ -116,3 +126,5 @@ LED or the Windows PC. Deploying the third board needs the matching ESP-IDF
 
 - 0.1.0: Initial outbound poll, bounded command confirmation, restart and
   acknowledgement behavior for the real Board C lab target.
+- Documentation clarified on 2026-11-08: deduplication retains only the most
+  recently attempted command ID. No API or wire behavior changed.
