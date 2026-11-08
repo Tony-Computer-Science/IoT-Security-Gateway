@@ -116,12 +116,12 @@ not rewritten to make the new router appear compliant.
 | R2 credential before commands | Uplink/AP credentials are protected from source/log disclosure and A requires WPA2 admission; application command authentication is not part of this router. |
 | R3 status/output allow-list, fixed destination | Intentionally incompatible: clients choose ordinary IPv4 destinations. |
 | R4 configurable request limits | Packet queues are bounded; the PC service reuses browser login/command limits and allows one pending target command. These are separate from router policy. |
-| R5 bounded authorized event log | The PC service exposes an authenticated bounded application log. Router link counters and serial diagnostics are separate; the UI events view is unfinished. |
-| R6 normal target output control | C6 LED control and PC command confirmation are implemented and tested locally; third-board hardware acceptance is pending. |
+| R5 bounded authorized event log | The PC service exposes an authenticated bounded application log through the implemented events view. Router link counters and serial diagnostics are separate. |
+| R6 normal target output control | C6/S3 LED control and PC command confirmation are implemented. S3 bench acceptance is recorded separately; C6 fixed-IP PC integration remains pending. |
 | R7 restart handling | Session invalidation and closed data paths are implemented; C6 UART peer-restart checks passed. SPI/full hardware acceptance remains pending. Local Board C control does not require the A/B link. |
 
 The [SPI 0.2.0 contract](spi-protocol.md) supersedes the draft command protocol.
-The [REST API 0.2.0](api-contract.md) is served by the PC, not A or B, and
+The [REST API 0.3.1](api-contract.md) is served by the PC, not A or B, and
 documents unknown command results when a delivered command lacks confirmation.
 PCB signal routing remains valid, but its A-uplink/B-IoT-AP labels reflect the
 old architecture and must be revised before fabrication.

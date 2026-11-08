@@ -10,7 +10,7 @@ Devices -> Board A: WPA2 AP -> SPI/UART -> Board B: Wi-Fi station -> Router -> I
 
 The board names remain **station-board (A)** and **bridge-board (B)** for
 repository compatibility. These names do not describe their new Wi-Fi modes:
-A is the access point; B is the upstream station. A third ESP32-C6 (Board C)
+A is the access point; B is the upstream station. A third ESP32-C6 or ESP32-S3 (Board C)
 joins A's AP and controls an RGB LED through a separate PC web service.
 
 ## Repository guide
@@ -131,7 +131,8 @@ deployment. The current device channel is lab-only plain HTTP; see the
 - Board C is an ESP32-C6 Wi-Fi LED device that contacts a PC at
   **192.168.78.10:8000**. The PC serves the existing website and confirms LED
   commands against device acknowledgements. See [third-board setup](firmware/target-device/README.md).
-  The firmware build and local API tests pass; third-board hardware testing is pending.
+  S3 physical LED/heartbeat/restart results are recorded in
+  [bench evidence](docs/s3-test-evidence.md); C6 fixed-IP Windows acceptance is pending.
 - ESP32-C6 UART hardware checks verified AP/DHCP, phone internet access and
   peer-restart recovery; see [UART results](docs/uart-link.md). SPI hardware,
   simultaneous clients and extended soak checks remain on the

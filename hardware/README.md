@@ -3,7 +3,7 @@
 The physical side of the gateway: the SPI or optional UART link between
 Board A and Board B, S3/C6 pinouts, Board C's RGB LED, and the KiCad schematic
 and PCB. The unfabricated Rev A PCB uses two ESP32-S3 modules. The current
-UART demo uses C6 development boards; the separate Board C target is also C6.
+UART demo uses C6 development boards; Board C supports C6 or S3 with a verified carrier LED pin.
 
 ## Current owner (provisional)
 
@@ -36,8 +36,7 @@ changed in menuconfig. Match those settings to the actual wiring on both ends.
 
 ## Opening the KiCad project
 
-Install [KiCad](https://www.kicad.org/) 10 (TODO: agree on a team version, since
-newer KiCad files can't be opened by older versions). Open
+Install [KiCad](https://www.kicad.org/) 10. Open
 `kicad/IoT-Gateway.kicad_pro`.
 
 Per-user and generated files (`*.kicad_prl`, `*-backups/`, `fp-info-cache`) are

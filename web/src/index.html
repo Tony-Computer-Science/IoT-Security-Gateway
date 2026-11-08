@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,6 +17,8 @@
       <button type="button" class="nav-btn" data-nav="control">Control</button>
       <button type="button" class="nav-btn" data-nav="events">Events</button>
     </nav>
+    <!-- Light on every load; the choice is never saved (see web-design.md). -->
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false">Dark theme</button>
   </header>
 
   <!-- Global notice area for errors and state changes. Announced to screen readers. -->
@@ -25,43 +27,97 @@
   <main>
     <!-- View 1: login -->
     <section id="view-login" class="view" data-view="login" aria-labelledby="login-heading" hidden>
-      <h2 id="login-heading">Sign in</h2>
-      <form id="login-form" class="card" autocomplete="off" novalidate>
+      <form id="login-form" class="panel login-panel" autocomplete="off" novalidate>
+        <h2 id="login-heading">Sign in to the gateway</h2>
         <label for="login-username">Username</label>
         <input id="login-username" name="username" type="text" autocomplete="username" required>
         <label for="login-password">Password</label>
         <input id="login-password" name="password" type="password" autocomplete="current-password" required>
-        <button type="submit">Sign in</button>
+        <button type="submit" class="key">Sign in</button>
         <p id="login-message" class="state" data-state="" role="alert" hidden></p>
       </form>
     </section>
 
     <!-- View 2: device control and status -->
     <section id="view-control" class="view" data-view="control" aria-labelledby="control-heading" hidden>
-      <h2 id="control-heading">Device control</h2>
-      <div class="card">
-        <dl class="status-grid">
-          <dt>LED output</dt>           <dd id="status-output">—</dd>
-          <dt>Target device</dt>        <dd id="status-target">—</dd>
-          <dt>Board-to-board link</dt>  <dd id="status-link">—</dd>
-          <dt>Gateway uptime</dt>       <dd id="status-uptime">—</dd>
+      <div class="view-head">
+        <h2 id="control-heading">Device control</h2>
+        <dl class="uptime">
+          <dt id="uptime-label">Gateway uptime</dt>
+          <dd id="status-uptime">—</dd>
         </dl>
+      </div>
+      <div class="panel">
         <!-- Gateway health from the status poll (link down, target unreachable, poll errors). -->
-        <p id="control-state" class="state" data-state="" role="status" hidden></p>
-        <div class="actions">
-          <button type="button" data-action="led_on" disabled>Turn on</button>
-          <button type="button" data-action="led_off" disabled>Turn off</button>
+        <p id="live-test-note" class="state" hidden></p>
+        <p id="control-state" class="state health" data-state="" role="status" hidden></p>
+
+        <!-- One row of three readouts. Each unit is one label, one value, and
+             the medium beneath it. The thin strip on top of each unit is the
+             hardware path, in the order data travels from the upstream side:
+             bridge board B to station board A over the UART wire, A to IoT
+             device C over A's private Wi-Fi, C the device. It is context for
+             where a failure happened. -->
+        <ol class="path" aria-label="Signal path from the gateway to the device">
+          <li class="unit unit-link">
+            <span class="seg" aria-hidden="true"><span class="node-box">B</span><span class="wire"></span></span>
+            <dl class="readout">
+              <dt><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1"/></svg> <span id="link-label">Board-to-board link</span></dt>
+              <dd id="status-link">—</dd>
+              <dd id="link-medium" class="medium">UART wire, bridge board B to station board A</dd>
+            </dl>
+          </li>
+          <li class="unit unit-target">
+            <span class="seg" aria-hidden="true"><span class="node-box">A</span><span class="wire"></span></span>
+            <dl class="readout">
+              <dt><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 9.5a14 14 0 0 1 19 0M5.5 13a9.5 9.5 0 0 1 13 0M8.5 16.5a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg> Target device</dt>
+              <dd id="status-target">—</dd>
+              <dd id="target-medium" class="medium">Private Wi-Fi &quot;IoT-Gateway&quot;, station board A to IoT device C</dd>
+            </dl>
+          </li>
+          <li class="unit unit-led">
+            <span class="seg" aria-hidden="true"><span class="node-box">C</span></span>
+            <dl class="readout">
+              <dt><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 15V9a4 4 0 0 1 8 0v6zM6 15h12M10 15v6M14 15v4"/></svg> LED output</dt>
+              <dd id="status-output">—</dd>
+              <dd class="medium">On the IoT device C</dd>
+            </dl>
+            <!-- The controls sit with the output they change. -->
+            <div class="actions" role="group" aria-label="LED controls">
+              <button type="button" class="key" data-action="led_on" disabled>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v16"/></svg>
+                Turn on
+              </button>
+              <button type="button" class="key" data-action="led_off" disabled>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/></svg>
+                Turn off
+              </button>
+            </div>
+            <!-- Result of the last command the user sent. -->
+            <p id="command-result" class="state" data-state="" role="status" hidden></p>
+          </li>
+        </ol>
+        <div id="live-monitoring" class="monitoring" hidden>
+          <dl>
+            <dt>ESP uptime</dt>
+            <dd id="device-uptime" class="monitoring-value">Unknown</dd>
+            <dd id="device-uptime-note" class="medium">Waiting for first device report</dd>
+          </dl>
+          <dl>
+            <dt>Last confirmed command</dt>
+            <dd id="last-command" class="monitoring-value">None yet</dd>
+            <dd id="last-command-note" class="medium">No command confirmed since service start</dd>
+          </dl>
+          <p class="medium monitoring-note">Command history is shared across signed-in users and resets with the service. It does not replace the latest LED state above.</p>
         </div>
-        <!-- Result of the last command the user sent. -->
-        <p id="command-result" class="state" data-state="" role="status" hidden></p>
       </div>
       <button type="button" id="logout-btn" class="link-btn">Sign out</button>
     </section>
 
     <!-- View 3: event log -->
     <section id="view-events" class="view" data-view="events" aria-labelledby="events-heading" hidden>
-      <h2 id="events-heading">Event log</h2>
-      <div class="card">
+      <div class="view-head">
+        <h2 id="events-heading">Event log</h2>
         <div class="toolbar">
           <label for="events-outcome">Outcome</label>
           <select id="events-outcome">
@@ -72,10 +128,16 @@
           </select>
           <button type="button" id="events-refresh">Refresh</button>
         </div>
-        <div class="table-wrap">
+      </div>
+      <div class="panel">
+        <!-- Refresh errors, shown beside the last loaded list. -->
+        <p id="events-state" class="state" data-state="" role="status" hidden></p>
+        <!-- Shown instead of the table when the log (or the filter) has no entries. -->
+        <p id="events-empty" class="state" data-state="" hidden></p>
+        <div class="table-wrap" id="events-table-wrap" hidden>
           <table class="events-table">
             <thead>
-              <tr><th scope="col">#</th><th scope="col">Uptime</th><th scope="col">Type</th><th scope="col">Outcome</th><th scope="col">Detail</th></tr>
+              <tr><th scope="col">Seq</th><th scope="col">Uptime</th><th scope="col">Type</th><th scope="col">Outcome</th><th scope="col">Detail</th></tr>
             </thead>
             <tbody id="events-body"></tbody>
           </table>

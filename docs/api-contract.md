@@ -1,6 +1,6 @@
 # REST API contract
 
-**Version: 0.2.0**
+**Version: 0.3.1**
 
 This is the interface between the web interface (`web/`) and the **separate
 web service**, hosted outside the ESP32 boards. For simplicity, the demo runs
@@ -13,7 +13,8 @@ version, add a changelog entry, get review from both sides, and update the mock.
 The service (`web/device_server.py`) serves the browser endpoints and static
 website, backed by an outbound-polling Board C. Its device channel is specified
 in [device API](device-api.md). Follow [Setting Up](../README.md#setting-up)
-for the local demo. Board A and Board B provide networking; Board C controls
+for the fixed-IP PC demo and [S3 live test](s3-live-test.md) for S3 bench details.
+Board A and Board B provide networking; Board C controls
 the LED. The service does not authenticate the intentionally vulnerable target
 or claim the original gateway-only security architecture.
 
@@ -78,7 +79,7 @@ Reads service and target status. Clients poll this at a fixed interval
 
 ```json
 {
-  "output": "on" | "off",
+  "output": "on" | "off" | null,
   "target_reachable": boolean,
   "link_ok": boolean,
   "uptime_s": number,
@@ -95,11 +96,26 @@ Reads service and target status. Clients poll this at a fixed interval
 | `seq` | Sequence number of the most recent event-log entry, or 0 before the first event. Lets clients notice new events without fetching `/api/events`. |
 
 `output` is the latest device-reported state; before the first heartbeat,
-its initial value is off and reachability is false. Heartbeats do not prove
+its value is null and reachability is false. Heartbeats do not prove
 internet connectivity. The UI remains usable for local device control when
 bridge/internet access is down but the AP and service computer are reachable.
 The standalone mock can inject `link_ok` and `target_reachable` independently;
 its original A/B-link simulation does not describe the real service's path.
+
+Live-device responses also include `status_source: "device_http"`, `last_seen_s`
+(seconds since the latest report, or null) and `device_uptime_s` (uptime at that
+report, or null). Device uptime is not extrapolated when reports stop.
+
+Both the real service and mock include `last_confirmed_command`: null until a
+command succeeds, otherwise `{ "action": "led_on" | "led_off", "output": "on" |
+"off", "service_uptime_s": number }`. The timestamp is the service's uptime
+when it accepted the successful command confirmation, not a wall-clock time.
+Only a matching successful acknowledgement creates a record in the real service;
+the mock simulates confirmation. Failed, pending, denied and unconfirmed commands,
+including acknowledgements arriving after timeout, do not replace it. The record
+is shared across sessions, retained across device restarts, and cleared by service
+restart. It is historical evidence, not a claim about current LED state. Older
+services may omit this additive field; clients must tolerate its absence.
 
 ### 2.4 `POST /api/command`
 
@@ -220,6 +236,24 @@ are current lab service limits, not firmware-wide security guarantees.
 
 ## 5. Changelog
 
+### 0.3.1 — live monitoring details
+
+- Add shared last-confirmed-command history to status in the service and mock.
+- Document device uptime and report age; distinguish stale telemetry and command
+  history from the current device report. Device wire protocol is unchanged.
+
+### 0.3.0 — live target integration
+
+The real-device service adds `status_source: "device_http"`, `last_seen_s`
+(seconds since the last accepted device report, or null before first contact),
+and `device_uptime_s` (uptime in the last report, or null). Before any report,
+`output` is null rather than a fabricated off state. After expiry it retains
+the last report; clients must inspect reachability/freshness. Device-reported
+uptime is a snapshot, not an advancing clock. The standalone mock omits these
+optional fields and retains its simulated link/target behavior. Clients select
+live-device labels only when `status_source` identifies the real service.
+
+
 ### 0.2.0
 
 - Add PC lab mode using the existing browser endpoints and a separately
@@ -230,8 +264,6 @@ are current lab service limits, not firmware-wide security guarantees.
 - Documentation clarified on 2026-11-06: the web service is external to all
   boards, with a local-computer demo. Existing heartbeat, uptime and error
   behavior is unchanged; onboard hosting is not a planned setup step.
-- Documentation clarified on 2026-11-08: record implemented sequence/rate-limit
-  semantics and the shared lab defaults. No API or wire behavior changed.
 
 ### 0.1.0 (initial)
 

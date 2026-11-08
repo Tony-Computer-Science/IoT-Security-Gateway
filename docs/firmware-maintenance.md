@@ -96,7 +96,7 @@ using [the installed ESP-IDF 6.1 environment](../firmware/bridge-board/README.md
 Also build A/B with nonempty test credentials and the test host with echo configuration: empty
 defaults can allow the compiler to discard optional paths.
 
-After Board C changes, build `firmware/target-device` for C6 and run
+After Board C changes, build `firmware/target-device` for C6 and S3 (with a verified LED pin) and run
 `python3 tools/test/run_target_tests.py`. For service changes, run
 `python3 tools/test/test_device_server.py` and, when Postman is installed,
 `python3 tools/test/run_device_api_tests.py`. The target parser runner needs

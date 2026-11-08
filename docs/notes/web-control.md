@@ -51,7 +51,9 @@ real PC service.
 The page asks for status every 2 seconds. It never has two requests open at
 once:
 
-1. Only one timer exists at a time. Setting a new one cancels the old one.
+1. Only one timer exists at a time. It refreshes the active Control or Events
+   view; switching views discards late results from the old view. Setting a new
+   timer cancels the old one.
 2. The next poll is scheduled only after the current one finishes. A slow
    gateway makes polling slower instead of piling up requests.
 3. If a timer fires while a poll or a command is still in flight, that tick
@@ -71,3 +73,12 @@ gateway. Showing the last known state." The next successful poll replaces the
 message with fresh data. The one exception is a 401: the gateway no longer
 recognises the session, so polling stops and the user is sent back to the
 login screen with "Your session expired."
+
+## Live monitoring
+
+The real service identifies itself with `status_source: "device_http"`. Before
+the first report, output is Unknown. The view shows ESP uptime at the latest
+report separately from API service uptime and last confirmed command history.
+Failed status refreshes retain these values with a stale label and disable
+commands until fresh status returns. Device restarts reset ESP uptime; history
+survives device restarts and clears when the service restarts.

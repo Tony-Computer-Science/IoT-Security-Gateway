@@ -17,13 +17,14 @@ Lalit Dhakal. Any member may work here; the current owner reviews (see
 | Path | Purpose |
 |---|---|
 | `src/index.html` | Semantic shells for the three views: login, control, events |
-| `src/style.css` | Design tokens and the six state styles |
-| `src/app.js` | Bootstrap, view registry, show/hide switching, status polling loop |
+| `src/style.css` | Design tokens, theme and the six state styles |
+| `src/app.js` | Login/control/events views, shared polling, live monitoring and theme toggle |
 | `src/api.js` | One function per endpoint; bearer token, JSON, error mapping. No DOM access. |
 | `device_server.py` | PC UI/API service with outbound device polling and command acknowledgements |
 | `mock/` | Simulated service/device behavior for UI development, see [mock/README.md](mock/README.md) |
 | `scripts/build.py` | Minify, gzip, size report, 60 KB budget check |
 | `scripts/mklittlefs.sh` | Legacy asset packer from the former onboard-hosting design; unused by the service |
+| `scripts/verify_littlefs.py` | Optional legacy image verifier; not required for PC hosting |
 | `dist/` | Build output. **Git-ignored.** Created by `build.py`. |
 
 The build scripts live in `scripts/`, not `build/`. ESP-IDF's ignore pattern
@@ -128,10 +129,16 @@ and uses the channel-unavailable style; it does not report A/B link health.
 A delivered command without confirmation returns 504 and an unknown-result
 message; the UI preserves the last reported output until a fresh report arrives.
 
-## Remaining work
+## Current behavior and remaining acceptance
 
-Login, status polling and LED control are implemented. The browser events
-view remains a TODO; `/api/events` is available from the backend. The PC
-service has local HTTP tests, but the physical third C6 and Windows PC still
-need an end-to-end test. The website/API belongs to the separate service;
+Login, confirmed LED control, event filtering and live device monitoring are
+implemented. One poll loop refreshes the active Control or Events view. Live
+status uses device HTTP heartbeats, reports Unknown before first contact,
+and shows ESP uptime separately from service uptime and historical command
+confirmation. Failed status refreshes disable commands until status recovers.
+The theme toggle is in memory; each page load starts in light mode.
+
+The [S3 bench evidence](../docs/s3-test-evidence.md) records physical on/off
+and restart/heartbeat recovery. C6 and Windows fixed-IP integration still need
+an end-to-end test. The website/API belongs to the separate PC service;
 the boards provide networking and the IoT output.

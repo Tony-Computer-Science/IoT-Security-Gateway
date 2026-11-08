@@ -1,6 +1,7 @@
 # firmware/target-device: Board C
 
-ESP-IDF **6.1**, **ESP32-C6**, 4 MB flash. Board C joins **IoT-Gateway** over
+ESP-IDF **6.1**, **ESP32-C6** (4 MB) or **ESP32-S3 N16R8** (16 MB).
+Board C joins **IoT-Gateway** over
 Wi-Fi and polls the UI computer at **192.168.78.10:8000**. It uses the existing
 website's `led_on` / `led_off` commands. It needs USB power and no signal
 jumpers to station or bridge. The website/API is a separate service outside
@@ -59,6 +60,12 @@ Under **Board C IoT device**, set:
 | Command polling interval | 500 ms by default |
 | Addressable RGB LED GPIO | 8 on the matching C6 DevKit board |
 
+For S3, use `idf.py set-target esp32s3` and configure the verified carrier LED
+GPIO; S3 defaults to -1 and deliberately refuses to build until a pin is set.
+The tested HW678 carrier uses GPIO48; that observation does not apply to every
+S3 carrier. Target-specific defaults select 16 MB flash and USB Serial/JTAG.
+See the [S3 build and bench guide](../../docs/s3-live-test.md).
+
 The UI address and port are compiled into the device firmware as
 `TARGET_UI_HOST` / `TARGET_UI_PORT`; there is no automatic server discovery.
 The PC acts as the server at that fixed endpoint for this demo. If the UI/API
@@ -99,8 +106,11 @@ The C6 firmware build passed on 2026-11-05. Sanitized C response-parser tests,
 ten real-HTTP server tests, and twelve Postman requests / 23 assertions were
 rerun successfully on 2026-11-08; see the [software validation record](../../docs/testing.md#recorded-local-software-validation--2026-11-08).
 The HTTP tests use a protocol-level device actor, not C6 hardware. This image
-has not yet been flashed onto the third board; its radio, LED and Windows
-integration still need the acceptance steps above.
+has not yet been flashed onto the C6 third board; its radio, LED and Windows
+integration still need the acceptance steps above. The separate S3 bench
+test recorded physical on/off and heartbeat/restart recovery on 2026-11-07;
+see [that evidence](../../docs/s3-test-evidence.md). It does not establish
+acceptance of the gateway's fixed-IP Windows setup.
 
 See [device API](../../docs/device-api.md), [browser API](../../docs/api-contract.md)
 and [test commands](../../tools/test/README.md). This lab application does not

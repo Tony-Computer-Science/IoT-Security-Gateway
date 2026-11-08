@@ -127,6 +127,50 @@ class DeviceServerTests(unittest.TestCase):
         finally:
             actor.close()
 
+    def test_confirmation_history_survives_failed_commands_and_device_restart(self):
+        self.assertIsNone(self.status()[1]["last_confirmed_command"])
+        actor = DeviceActor(self.base).start()
+        try:
+            code, _ = exchange(self.base, "POST", "/api/command", {"action": "led_on"}, self.token)
+            self.assertEqual(code, 200)
+        finally:
+            actor.close()
+        confirmed = self.status()[1]["last_confirmed_command"]
+        self.assertEqual(confirmed["action"], "led_on")
+        self.assertEqual(confirmed["output"], "on")
+        self.assertIsInstance(confirmed["service_uptime_s"], int)
+        _, other = exchange(self.base, "POST", "/api/login",
+                            {"username": "operator", "password": "test-only-password"})
+        self.assertEqual(exchange(self.base, "GET", "/api/status", token=other["token"])[1]
+                         ["last_confirmed_command"], confirmed)
+        thread, result = self.begin_command("led_off")
+        self.assertEqual(self.status()[1]["last_confirmed_command"], confirmed)
+        exchange(self.base, "POST", "/device/poll", report(output="on"))
+        thread.join(2)
+        self.assertEqual(result[0][0], 504)
+        self.assertEqual(self.status()[1]["last_confirmed_command"], confirmed)
+        exchange(self.base, "POST", "/device/poll", report(boot_id="0000000000000002", uptime_s=0))
+        status = self.status()[1]
+        self.assertEqual(status["device_uptime_s"], 0)
+        self.assertEqual(status["output"], "off")
+        self.assertEqual(status["last_confirmed_command"], confirmed)
+        restarted = DeviceGateway(copy.deepcopy(FIXTURES), "test-only-password")
+        self.assertIsNone(restarted.last_confirmed_command)
+
+    def test_mock_confirmation_history_and_service_reset(self):
+        mock = MockGateway(copy.deepcopy(FIXTURES), "test-only-password")
+        _, auth = mock.login({"username": "operator", "password": "test-only-password"})
+        token = "Bearer " + auth["token"]
+        self.assertIsNone(mock.status(token)[1]["last_confirmed_command"])
+        mock.command(token, {"action": "led_on"})
+        confirmed = mock.status(token)[1]["last_confirmed_command"]
+        self.assertEqual((confirmed["action"], confirmed["output"]), ("led_on", "on"))
+        with self.assertRaises(ApiError):
+            mock.command(token, {"action": "not_a_command"})
+        self.assertEqual(mock.status(token)[1]["last_confirmed_command"], confirmed)
+        mock.reset()
+        self.assertIsNone(mock.last_confirmed_command)
+
     def test_no_delivery_timeout_cannot_later_replay(self):
         exchange(self.base, "POST", "/device/poll", report())
         code, body = exchange(self.base, "POST", "/api/command", {"action": "led_on"}, self.token)
@@ -145,6 +189,7 @@ class DeviceServerTests(unittest.TestCase):
         late = report(output="on", ack_id=command["id"])
         self.assertEqual(exchange(self.base, "POST", "/device/poll", late)[1], {"command": None})
         self.assertEqual(self.status()[1]["output"], "on")
+        self.assertIsNone(self.status()[1]["last_confirmed_command"])
 
     def test_restart_invalidates_old_command(self):
         exchange(self.base, "POST", "/device/poll", report())
@@ -204,6 +249,44 @@ class DeviceServerTests(unittest.TestCase):
         self.assertEqual(exchange(self.base, "POST", "/api/command", {"action": "led_on"}, self.token)[0], 502)
         self.gateway.poll(report())
         self.assertTrue(self.status()[1]["target_reachable"])
+
+    def test_event_view_detects_expiry_without_status_poll(self):
+        now = [100.0]
+        self.gateway.clock = lambda: now[0]
+        self.gateway.poll(report())
+        now[0] += 9
+        status, body = exchange(self.base, "GET", "/api/events?outcome=alert", token=self.token)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["events"][0]["detail"], "device heartbeat expired")
+        count = len(body["events"])
+        body = exchange(self.base, "GET", "/api/events?outcome=alert", token=self.token)[1]
+        self.assertEqual(len(body["events"]), count)
+
+    def test_unseen_device_is_unknown_not_off(self):
+        status, body = self.status()
+        self.assertEqual(status, 200)
+        self.assertEqual(body["status_source"], "device_http")
+        self.assertIsNone(body["output"])
+        self.assertIsNone(body["last_seen_s"])
+        self.assertIsNone(body["device_uptime_s"])
+        self.assertFalse(body["target_reachable"])
+
+    def test_freshness_preserves_last_report_and_restart_resets_uptime(self):
+        now = [100.0]
+        self.gateway.clock = lambda: now[0]
+        self.gateway.poll(report(output="on", uptime_s=42))
+        now[0] += 9
+        body = self.status()[1]
+        self.assertEqual(body["last_seen_s"], 9)
+        self.assertEqual(body["device_uptime_s"], 42)
+        self.assertEqual(body["output"], "on")
+        self.assertFalse(body["target_reachable"])
+        self.gateway.poll(report(boot_id="0000000000000002", uptime_s=0))
+        body = self.status()[1]
+        self.assertEqual(body["last_seen_s"], 0)
+        self.assertEqual(body["device_uptime_s"], 0)
+        self.assertEqual(body["output"], "off")
+        self.assertTrue(body["target_reachable"])
 
     def test_invalid_device_messages_and_actions(self):
         for changes, code in (({"device_id": "another"}, 403), ({"output": []}, 400),

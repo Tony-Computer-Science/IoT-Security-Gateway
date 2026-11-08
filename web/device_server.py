@@ -38,6 +38,7 @@ class DeviceGateway(MockGateway):
         self.command_timeout_s = command_timeout_s
         self.last_seen = None
         self.device_boot = None
+        self.device_uptime_s = None
         self.pending = None
         self.link_ok = self.target_reachable = False
 
@@ -53,8 +54,20 @@ class DeviceGateway(MockGateway):
         with self.lock:
             self._require_session(auth)
             self._refresh()
-            return 200, {"output": self.output, "target_reachable": self.target_reachable,
-                         "link_ok": self.link_ok, "uptime_s": self.uptime(), "seq": self.seq}
+            return 200, {"output": self.output if self.last_seen is not None else None,
+                         "target_reachable": self.target_reachable,
+                         "link_ok": self.link_ok, "uptime_s": self.uptime(), "seq": self.seq,
+                         "status_source": "device_http",
+                         "last_seen_s": None if self.last_seen is None else
+                             max(0, round(self.clock() - self.last_seen, 1)),
+                         "device_uptime_s": self.device_uptime_s,
+                         "last_confirmed_command": self.last_confirmed_command}
+
+    def events_list(self, auth, query):
+        with self.lock:
+            self._require_session(auth)
+            self._refresh()
+        return super().events_list(auth, query)
 
     def command(self, auth, body):
         with self.changed:
@@ -87,6 +100,9 @@ class DeviceGateway(MockGateway):
                 self.changed.wait(remaining)
             self.pending = None
             if pending["result"] is True:
+                self.last_confirmed_command = {"action": pending["action"],
+                                               "output": pending["output"],
+                                               "service_uptime_s": self.uptime()}
                 self._log("command", "allowed", pending["action"] + " confirmed by device")
                 return 200, {"result": "ok", "output": pending["output"]}
             # Delivered commands may have changed the LED even if the ACK was
@@ -117,6 +133,7 @@ class DeviceGateway(MockGateway):
                     self.pending["result"] = False
             self.device_boot = body["boot_id"]
             self.last_seen = self.clock()
+            self.device_uptime_s = body["uptime_s"]
             self.output = body["output"]
             self._refresh()
             pending = self.pending
@@ -134,7 +151,7 @@ class DeviceGateway(MockGateway):
 
 
 class DeviceHandler(Handler):
-    server_version = "gateway-device-ui/0.2.0"
+    server_version = "gateway-device-ui/0.3.1"
 
     def setup(self):
         super().setup()

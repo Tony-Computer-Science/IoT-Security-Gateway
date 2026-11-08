@@ -1,6 +1,6 @@
 # Board C to PC device API
 
-**Version 0.1.0.** One ESP32-C6-WROOM-1 target joins IoT-Gateway and initiates
+**Version 0.1.0.** One ESP32-C6 or ESP32-S3 target joins IoT-Gateway and initiates
 HTTP requests to **192.168.78.10:8000**. The website and authenticated browser
 API are a separate service external to the boards. For simplicity, the demo
 runs this service on a local computer instead of a dedicated server. The PC
@@ -45,7 +45,8 @@ Request, with exactly these fields:
   `--device-id` (default `iot-c6`). One target is supported by this UI contract.
 - `boot_id`: fresh random 16-character lowercase hex value each device boot.
 - `output`: `on` or `off`, the last successfully driven LED state. Boot starts
-  off. On is green on the GPIO8 addressable RGB LED.
+  off. On is green on the configured addressable RGB LED (GPIO8 on the matching
+  C6 carrier; S3 requires a verified carrier GPIO).
 - `ack_id`: last attempted command ID, 32 lowercase hex characters, or null
   before any command. Repeated acknowledgements are safe.
 - `ack_ok`: true for a successful driver operation; false on driver failure.

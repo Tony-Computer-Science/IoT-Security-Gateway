@@ -19,7 +19,7 @@ network-order status, subnet overlap, every readiness combination, source
 spoofing, truncated L4 headers, direct-route bypass policy, multiple client
 addresses and bounded UART encoding/overflow/resynchronization.
 
-`test_device_server.py` runs ten tests against the real PC HTTP service on a
+`test_device_server.py` runs fifteen tests against the real PC HTTP service on a
 temporary loopback port, using a simulated Board C. It checks browser sessions,
 command confirmation, timeouts, invalid messages, heartbeat expiry, concurrent
 commands and restart recovery. It needs permission to bind a local port, but
@@ -54,11 +54,37 @@ The same `ASAN_OPTIONS=detect_leaks=0` workaround applies to `run_target_tests.p
 
 Build firmware with ESP-IDF 6.1. Production `station-board` and `bridge-board`
 support S3 or C6; `spi-test-host` supports S3 only; `target-device` supports
-C6 only. Choose the matching `idf.py set-target esp32s3` or
+S3 or C6 (configure the verified carrier LED pin for S3). Choose the matching `idf.py set-target esp32s3` or
 `idf.py set-target esp32c6` on initial configuration. Set-target resets
 sdkconfig, so configure credentials afterward. See the [firmware index](../firmware/README.md).
 
+## Merge integration checks — 2026-11-08
+
+The PR #6 integration preserves main's events/theme/live-monitoring behavior
+and S3 support alongside the A/B router and fixed-IP PC service. The browser
+API is 0.3.1; the device wire protocol remains 0.1.0. The PC serves the UI/API
+at **192.168.78.10:8000**; no UI is served by an ESP32.
+
+| Check | Result |
+|---|---|
+| Required `bash ci/run.sh` | PASS; 15 real-service HTTP tests and frontend asset checks |
+| Shared gateway protocol/policy/UART and target parser | PASS with ASan/UBSan; leak detection disabled |
+| Browser API evaluation suite | PASS; 19/19 scripts against a temporary mock |
+| Saved Postman collection | PASS; 12 requests / 23 assertions against the real local service and device actor |
+| JavaScript and legacy packer syntax | PASS |
+| Web asset size | PASS; 13,179 / 61,440 bytes gzipped (21.5%) |
+| Board C C6 and S3 firmware builds | PASS; isolated ESP-IDF 6.1 builds using compile-only settings |
+| Gateway firmware builds | PASS; C6 station/bridge with UART and nonempty compile-only credentials, S3 SPI test host |
+| Documentation integrity | PASS; 188 local links/anchors across 44 documents, no conflict markers or whitespace errors |
+
+Physical hardware tests were not repeated during conflict resolution. S3 bench
+results and C6 UART router results are separate dated records, not proof of
+full gateway isolation or Windows fixed-IP acceptance.
+
 ## Recorded local software validation — 2026-11-08
+
+These results preceded integration of main; use the merge checks above for
+the combined frontend and service.
 
 | Check | Result |
 |---|---|

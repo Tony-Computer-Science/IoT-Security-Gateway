@@ -106,6 +106,7 @@ All other GPIOs are unconnected on the PCB.
 | Function | GPIO | Notes |
 |---|---|---|
 | C6 RGB LED data | GPIO8 (configurable) | Green=on, black=off on the matching C6 development board; Board C is not on the PCB. Confirm carrier-board wiring if using another model. |
+| S3 RGB LED data | Verified carrier GPIO | S3 has no assumed pin; configure it before building. GPIO48 was physically verified on the tested HW678 carrier, not all S3 modules. |
 
 Board C uses Wi-Fi to IoT-Gateway and needs no signal wiring to A or B.
 See [Board C setup](../../firmware/target-device/README.md).

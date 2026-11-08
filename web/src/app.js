@@ -1,6 +1,5 @@
 // Application bootstrap: view registry, show/hide switching, and the status
-// polling loop, session guard, and the login and control views. Events
-// rendering is still a TODO stub.
+// polling loop, session guard, and the login, control, and events views.
 //
 // No framework, no router: a view is a <section data-view="name"> toggled
 // with the `hidden` attribute.
@@ -108,20 +107,35 @@ function expireSession() {
 //     finds a poll or a command in flight is skipped, not queued.
 //   - The next poll is scheduled only after the current one finishes, so a
 //     slow gateway slows polling down instead of stacking requests.
+//   - There is one loop for the whole app. Each view that needs refreshing
+//     passes its own task to startPolling (status for control, the event log
+//     for events), so two views can never refresh at the same time.
 
 let pollTimer = null;
 let polling = false;
 let pollInFlight = null; // Promise of the current poll, or null
 let commandInFlight = false; // set by the control view; pauses polling
+let pollTask = null; // async (isCurrent) => void, the active view's refresh
+let pollGeneration = 0; // bumped on start/stop so late results are dropped
+let rerunWhenFree = false; // an immediate poll was skipped; run it next
+let nextTickImmediate = false; // the pending timer was set with delay 0
 
-export function startPolling() {
-  if (polling) return;
+/**
+ * @param {(isCurrent: () => boolean) => Promise<void>} [task]  refresh to
+ *   run each tick. It must only apply its result while isCurrent() is true.
+ */
+export function startPolling(task = pollStatus) {
+  if (polling && pollTask === task) return;
+  stopPolling();
   polling = true;
+  pollTask = task;
   schedulePoll(0);
 }
 
 export function stopPolling() {
   polling = false;
+  pollTask = null;
+  pollGeneration++;
   if (pollTimer !== null) {
     clearTimeout(pollTimer);
     pollTimer = null;
@@ -130,28 +144,44 @@ export function stopPolling() {
 
 function schedulePoll(delayMs) {
   if (pollTimer !== null) clearTimeout(pollTimer);
+  nextTickImmediate = delayMs === 0;
   pollTimer = polling ? setTimeout(pollTick, delayMs) : null;
 }
 
 async function pollTick() {
   pollTimer = null;
   if (!polling) return;
-  if (pollInFlight || commandInFlight || document.hidden || !api.hasSession()) {
+  if (pollInFlight || commandInFlight) {
+    // Skip this tick. If it was meant to run now (view just opened, filter
+    // changed), run it as soon as the request in flight finishes.
+    if (nextTickImmediate) rerunWhenFree = true;
+    schedulePoll(POLL_INTERVAL_MS);
+    return;
+  }
+  if (document.hidden || !api.hasSession()) {
     schedulePoll(POLL_INTERVAL_MS); // skip this tick
     return;
   }
-  pollInFlight = pollStatus();
+  const gen = pollGeneration;
+  rerunWhenFree = false;
+  pollInFlight = pollTask(() => polling && gen === pollGeneration);
   await pollInFlight;
   pollInFlight = null;
-  schedulePoll(POLL_INTERVAL_MS);
+  schedulePoll(rerunWhenFree ? 0 : POLL_INTERVAL_MS);
 }
 
-async function pollStatus() {
+/** Run the active view's refresh as soon as no request is in flight. */
+function pollNow() {
+  if (pollInFlight || commandInFlight) rerunWhenFree = true;
+  else schedulePoll(0);
+}
+
+async function pollStatus(isCurrent) {
   try {
     const status = await api.getStatus();
-    if (polling) renderStatus(status);
+    if (isCurrent()) renderStatus(status);
   } catch (err) {
-    if (polling) renderStatusError(err);
+    if (isCurrent()) renderStatusError(err);
   }
 }
 
@@ -309,18 +339,23 @@ function formatSeconds(s) {
 // POST /api/command, or GET /api/status. Clicking a button never changes it.
 // Admission failures leave the target unchanged. A lost reply or missing
 // device acknowledgement can leave an unknown physical result. Keep the
-// last confirmed output until another report arrives; never infer success
+// last reported output until another report arrives; never infer success
 // or automatically retry from an ambiguous response.
 
 const LINK_DOWN_TEXT =
-  'The device connection is unavailable. Commands are disabled.';
+  'Board-to-board link is down: the station board and the bridge board cannot talk over the UART wire. Commands are disabled.';
 const TARGET_UNREACHABLE_TEXT =
-  'The IoT device is unavailable. Commands are disabled.';
+  'Target device unreachable: the station board cannot reach the IoT device on its private Wi-Fi. Commands are disabled.';
 const GATEWAY_UNREACHABLE_TEXT =
   'Could not reach the gateway. Check your connection and try again.';
 
 // Last state reported by the gateway. null means "not known yet".
-const shown = { output: null, target_reachable: null, link_ok: null, uptime_s: null };
+const shown = {
+  output: null, target_reachable: null, link_ok: null, uptime_s: null,
+  device_uptime_s: null, last_confirmed_command: null,
+};
+let liveDeviceMode = false;
+let statusFresh = false;
 let shownForSession = 0; // sessionExpiresAt of the session `shown` belongs to
 
 let controlWired = false;
@@ -342,7 +377,12 @@ function renderControl(el) {
   // A new login must not show the previous session's state.
   if (shownForSession !== sessionExpiresAt) {
     shownForSession = sessionExpiresAt;
-    Object.assign(shown, { output: null, target_reachable: null, link_ok: null, uptime_s: null });
+    statusFresh = false;
+    liveDeviceMode = false;
+    Object.assign(shown, {
+      output: null, target_reachable: null, link_ok: null, uptime_s: null,
+      device_uptime_s: null, last_confirmed_command: null,
+    });
     setStateMessage('control-state', '', '');
     setStateMessage('command-result', '', '');
   }
@@ -356,10 +396,36 @@ function renderControl(el) {
  */
 function renderStatus(status) {
   const wasHealthy = isHealthy();
+  statusFresh = true;
+  liveDeviceMode = status.status_source === 'device_http';
+  document.getElementById('uptime-label').textContent = liveDeviceMode ? 'API service uptime' : 'Gateway uptime';
+  document.getElementById('link-label').textContent = liveDeviceMode ? 'Device channel' : 'Board-to-board link';
+  document.getElementById('link-medium').textContent = liveDeviceMode
+    ? 'HTTP heartbeat between the API service and target'
+    : 'UART wire, bridge board B to station board A';
+  document.getElementById('target-medium').textContent = liveDeviceMode
+    ? (status.last_seen_s === null ? 'Waiting for first device report' : `Last report: ${status.last_seen_s}s ago`)
+    : 'Private Wi-Fi "IoT-Gateway", station board A to IoT device C';
+  const note = document.getElementById('live-test-note');
+  note.hidden = !liveDeviceMode;
+  note.textContent = 'Live device test: gateway A/B link and network isolation are not measured. LED state is the last device report.';
+  document.querySelector('.path').dataset.live = String(liveDeviceMode);
+  document.querySelector('.path').setAttribute('aria-label', liveDeviceMode ? 'Device test status' : 'Signal path from the gateway to the device');
+  const nodes = document.querySelectorAll('.node-box');
+  nodes[0].textContent = liveDeviceMode ? 'API' : 'B';
+  nodes[1].textContent = liveDeviceMode ? 'Wi-Fi' : 'A';
   if (status.output === 'on' || status.output === 'off') shown.output = status.output;
   shown.target_reachable = status.target_reachable === true;
   shown.link_ok = status.link_ok === true;
   shown.uptime_s = typeof status.uptime_s === 'number' ? status.uptime_s : null;
+  shown.device_uptime_s = Number.isSafeInteger(status.device_uptime_s) && status.device_uptime_s >= 0
+    ? status.device_uptime_s : null;
+  const confirmed = status.last_confirmed_command;
+  shown.last_confirmed_command = confirmed &&
+    ((confirmed.action === 'led_on' && confirmed.output === 'on') ||
+     (confirmed.action === 'led_off' && confirmed.output === 'off')) &&
+    Number.isSafeInteger(confirmed.service_uptime_s) && confirmed.service_uptime_s >= 0 &&
+    confirmed.service_uptime_s <= shown.uptime_s ? confirmed : null;
 
   // On the transition from healthy into a problem, clear the last command
   // result: a green "Done" under a live failure would read as "all fine"
@@ -368,10 +434,11 @@ function renderStatus(status) {
   // `shown` unhealthy, so its more specific failure message is kept.
   if (wasHealthy && !isHealthy()) setStateMessage('command-result', '', '');
 
-  // Channel availability is checked first. In PC mode both flags come from
-  // the device heartbeat; the mock also models a separate A/B link failure.
+  // Link down is checked first, so if both are reported only link down is
+  // shown. (The old reason, that A could not see the target without B, no
+  // longer holds: C is on A's own Wi-Fi. The order itself is unchanged.)
   if (!shown.link_ok) {
-    setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
+    setStateMessage('control-state', 'link-down', liveDeviceMode ? 'Device heartbeat unavailable. Commands are disabled; the LED display is the last reported state.' : LINK_DOWN_TEXT);
   } else if (!shown.target_reachable) {
     setStateMessage('control-state', 'target-unreachable', TARGET_UNREACHABLE_TEXT);
   } else {
@@ -399,7 +466,12 @@ function renderStatusError(err) {
     err.code === api.ErrorCode.NETWORK || err.code === api.ErrorCode.TIMEOUT
       ? GATEWAY_UNREACHABLE_TEXT
       : `Status update failed (${err.code}).`;
-  setStateMessage('control-state', 'denied', `${text} Showing the last known state.`);
+  statusFresh = false;
+  if (liveDeviceMode) {
+    document.getElementById('target-medium').textContent = 'Report age unavailable · status updates stopped';
+  }
+  setStateMessage('control-state', 'denied', `${text} Showing the last known state. Commands are disabled until status recovers.`);
+  renderShown();
 }
 
 async function onCommandClick(action) {
@@ -470,17 +542,17 @@ function handleCommandError(err) {
       shown.target_reachable = false;
       setStateMessage('control-state', 'target-unreachable', TARGET_UNREACHABLE_TEXT);
       setStateMessage('command-result', 'target-unreachable',
-        `Command not delivered: the IoT device could not be reached. ${unchanged}`);
+        `Command not delivered: the API service could not reach the IoT device. ${unchanged}`);
       break;
     case api.ErrorCode.LINK_DOWN:
       shown.link_ok = false;
-      setStateMessage('control-state', 'link-down', LINK_DOWN_TEXT);
+      setStateMessage('control-state', 'link-down', liveDeviceMode ? 'Device heartbeat unavailable. Commands are disabled; the LED display is the last reported state.' : LINK_DOWN_TEXT);
       setStateMessage('command-result', 'link-down',
-        `Command not delivered: the device connection is unavailable. ${unchanged}`);
+        `Command not delivered: the station board and the bridge board cannot talk over the UART wire. ${unchanged}`);
       break;
     case api.ErrorCode.COMMAND_UNCONFIRMED:
       setStateMessage('command-result', 'denied',
-        'The device did not confirm this command. Its result is unknown; wait for a status update before retrying.');
+        'The device did not confirm this command. Its LED may have changed. Waiting for a fresh device report; the command will not be retried automatically.');
       break;
     case api.ErrorCode.NETWORK:
     case api.ErrorCode.TIMEOUT:
@@ -540,7 +612,7 @@ function isHealthy() {
 // R7: commands are enabled only when the last status said both the link and
 // the target are up, and nothing else is blocking them.
 function commandsAllowed() {
-  return isHealthy() && Date.now() >= commandCooldownEndsAt;
+  return statusFresh && isHealthy() && Date.now() >= commandCooldownEndsAt;
 }
 
 function renderShown() {
@@ -551,6 +623,33 @@ function renderShown() {
   document.getElementById('status-link').textContent = label(shown.link_ok, 'Up', 'Down');
   document.getElementById('status-uptime').textContent =
     shown.uptime_s === null ? 'Unknown' : formatUptime(shown.uptime_s);
+
+  document.getElementById('live-monitoring').hidden = !liveDeviceMode;
+  document.getElementById('device-uptime').textContent = shown.device_uptime_s === null
+    ? 'Unknown' : formatUptime(shown.device_uptime_s);
+  document.getElementById('device-uptime-note').textContent = shown.device_uptime_s === null
+    ? 'Waiting for first device report'
+    : !statusFresh ? 'Last reported uptime · status updates unavailable'
+      : !isHealthy() ? 'Last reported uptime · device offline'
+        : 'Since ESP restart · measured at last report';
+  const confirmed = shown.last_confirmed_command;
+  document.getElementById('last-command').textContent = confirmed
+    ? `${confirmed.action === 'led_on' ? 'Turn on' : 'Turn off'} → ${confirmed.output.toUpperCase()} confirmed`
+    : 'None yet';
+  document.getElementById('last-command-note').textContent = confirmed
+    ? `Confirmed at service uptime ${formatUptime(confirmed.service_uptime_s)}${statusFresh ? '' : ' · history may be stale'}`
+    : 'No command confirmed since service start';
+
+  // Presentation hooks for CSS (the LED lamp and the signal-path wires).
+  // CONFIRMED STATE ONLY: these read `shown`, which is written only from
+  // gateway responses, never from the action the user requested. This
+  // function also runs when a click starts a command (to disable the
+  // buttons); at that moment `shown` still holds the last confirmed state,
+  // so the lamp does not change. Setting data-value from the requested
+  // action would be an optimistic update and would break R7.
+  document.getElementById('status-output').dataset.value = shown.output ?? 'unknown';
+  document.getElementById('status-target').dataset.value = label(shown.target_reachable, 'reachable', 'unreachable').toLowerCase();
+  document.getElementById('status-link').dataset.value = label(shown.link_ok, 'up', 'down').toLowerCase();
 
   const disabled = commandInFlight || !commandsAllowed();
   for (const btn of document.querySelectorAll('#view-control [data-action]')) {
@@ -595,16 +694,186 @@ function formatUptime(s) {
 }
 
 // ---------------------------------------------------------------------------
-// View rendering: TODO stubs. Signatures are fixed; fill in the bodies.
+// Events view
 // ---------------------------------------------------------------------------
+//
+// Shows the gateway's bounded event log (R5), newest first. This view has no
+// timer of its own: while it is open, the shared poll loop runs pollEvents
+// instead of the status poll, so an events refresh and a status poll can
+// never be in flight at the same time.
+
+const EVENT_TYPE_LABELS = { auth: 'Auth', command: 'Command', rate_limit: 'Rate limit', target: 'Target' };
+
+let eventsWired = false;
+let eventsLoaded = false; // a list has been shown for this session
+let eventsKey = null; // filter + seqs currently on screen; skips no-op redraws
+let eventsForSession = 0; // sessionExpiresAt of the session the list belongs to
 
 /**
- * TODO(events view): fetch with api.getEvents({outcome}) and render rows
- * into #events-body using textContent only (never innerHTML: `detail` is
- * server-provided text).
+ * Called each time the events view is shown. Wires the controls once and
+ * hands the shared poll loop the events refresh.
  * @param {HTMLElement} el  the events <section>
  */
-function renderEvents(el) {}
+function renderEvents(el) {
+  if (!eventsWired) {
+    el.querySelector('#events-outcome').addEventListener('change', () => {
+      eventsKey = null;
+      setStateMessage('events-state', 'pending', 'Loading events…');
+      pollNow();
+    });
+    el.querySelector('#events-refresh').addEventListener('click', pollNow);
+    eventsWired = true;
+  }
+  // A new login must not show the previous session's log.
+  if (eventsForSession !== sessionExpiresAt) {
+    eventsForSession = sessionExpiresAt;
+    eventsLoaded = false;
+    eventsKey = null;
+    document.getElementById('events-body').replaceChildren();
+    document.getElementById('events-table-wrap').hidden = true;
+    document.getElementById('events-empty').hidden = true;
+  }
+  if (!eventsLoaded) setStateMessage('events-state', 'pending', 'Loading events…');
+  startPolling(pollEvents);
+}
+
+// Filtering is done by the gateway (?outcome=), not in the browser, so the
+// list is always what the gateway actually holds for that outcome.
+async function pollEvents(isCurrent) {
+  const outcome = document.getElementById('events-outcome').value;
+  try {
+    const data = await api.getEvents(outcome ? { outcome } : {});
+    // The filter changed while this request was in flight: drop the result.
+    // The change handler already asked for a fresh poll.
+    if (!isCurrent() || outcome !== document.getElementById('events-outcome').value) return;
+    if (!Array.isArray(data.events)) throw new api.ApiError(api.ErrorCode.BAD_RESPONSE, 200);
+    showEvents(data.events, outcome);
+  } catch (err) {
+    if (isCurrent()) renderEventsError(err);
+  }
+}
+
+/**
+ * A failed refresh. Like a failed status poll, the last loaded list stays on
+ * screen and the error is shown beside it.
+ * @param {api.ApiError} err
+ */
+function renderEventsError(err) {
+  if (err.code === api.ErrorCode.INVALID_SESSION) {
+    sessionLost();
+    return;
+  }
+  const text =
+    err.code === api.ErrorCode.NETWORK || err.code === api.ErrorCode.TIMEOUT
+      ? GATEWAY_UNREACHABLE_TEXT
+      : `Event log refresh failed (${err.code}).`;
+  const after = eventsLoaded ? 'Showing the last loaded list.' : 'No events loaded yet.';
+  setStateMessage('events-state', 'denied', `${text} ${after}`);
+}
+
+function showEvents(events, outcome) {
+  setStateMessage('events-state', '', '');
+  eventsLoaded = true;
+
+  const list = events.slice().sort((a, b) => b.seq - a.seq); // newest first
+  const key = `${outcome}:${list.map((e) => e.seq).join(',')}`;
+  if (key === eventsKey) return; // nothing new: leave the DOM alone
+  eventsKey = key;
+
+  const empty = document.getElementById('events-empty');
+  const wrap = document.getElementById('events-table-wrap');
+  const tbody = document.getElementById('events-body');
+
+  if (list.length === 0) {
+    empty.textContent = outcome
+      ? `No ${outcome} events have been recorded yet.`
+      : 'No events have been recorded yet.';
+    empty.hidden = false;
+    wrap.hidden = true;
+    tbody.replaceChildren();
+    return;
+  }
+
+  const anchor = captureScrollAnchor(tbody);
+  tbody.replaceChildren(...list.map(eventRow));
+  empty.hidden = true;
+  wrap.hidden = false;
+  restoreScrollAnchor(tbody, anchor);
+}
+
+// All server text goes in with textContent, never innerHTML: `detail` comes
+// from the gateway and must not be able to inject markup.
+function eventRow(ev) {
+  const tr = document.createElement('tr');
+  tr.dataset.seq = String(ev.seq);
+  const cell = (text) => {
+    const td = document.createElement('td');
+    td.textContent = text;
+    return td;
+  };
+  const badge = document.createElement('span');
+  badge.className = 'state';
+  badge.dataset.state = eventState(ev);
+  badge.textContent = ev.outcome;
+  const outcomeCell = document.createElement('td');
+  outcomeCell.append(badge);
+
+  tr.append(
+    cell(String(ev.seq)),
+    cell(typeof ev.uptime_s === 'number' ? formatUptime(ev.uptime_s) : '?'),
+    cell(EVENT_TYPE_LABELS[ev.type] || String(ev.type)),
+    outcomeCell,
+    cell(String(ev.detail)),
+  );
+  return tr;
+}
+
+// Outcome badges reuse the control view's state styles. An alert takes the
+// style of whatever raised it, so a rate-limit alert looks like the
+// rate-limited state and a target alert looks like target-unreachable.
+function eventState(ev) {
+  if (ev.outcome === 'allowed') return 'ok';
+  if (ev.outcome === 'alert' && ev.type === 'rate_limit') return 'rate-limited';
+  if (ev.outcome === 'alert' && ev.type === 'target') return 'target-unreachable';
+  return 'denied';
+}
+
+// Scroll preservation. Before redrawing, note which row is at the top of the
+// screen and where; afterwards, scroll so that same row is in the same place.
+// New events then appear above the reader without moving what they are
+// reading. At the very top of the page nothing is anchored, so new events
+// stay visible as they arrive.
+function captureScrollAnchor(tbody) {
+  if (window.scrollY === 0) return null;
+  for (const row of tbody.rows) {
+    const r = row.getBoundingClientRect();
+    if (r.bottom > 0) return { seq: row.dataset.seq, top: r.top };
+  }
+  return null;
+}
+
+function restoreScrollAnchor(tbody, anchor) {
+  if (!anchor) return;
+  const row = tbody.querySelector(`tr[data-seq="${anchor.seq}"]`);
+  if (row) window.scrollBy(0, row.getBoundingClientRect().top - anchor.top);
+}
+
+// ---------------------------------------------------------------------------
+// Theme toggle (presentation only)
+// ---------------------------------------------------------------------------
+
+// Light is the default on every page load: the demo is projected and light
+// was tested for that, so the demo must not depend on the laptop's theme.
+// Dark is a deliberate manual choice. It is never saved (no storage, no
+// cookie), so a reload always returns to light.
+function initThemeToggle() {
+  const btn = document.getElementById('theme-toggle');
+  btn.addEventListener('click', () => {
+    const dark = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', String(dark));
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Bootstrap
@@ -623,11 +892,13 @@ function init() {
   });
   registerView('events', {
     onShow: () => renderEvents(views.events.el),
+    onHide: stopPolling,
   });
 
   for (const btn of document.querySelectorAll('[data-nav]')) {
     btn.addEventListener('click', () => showView(btn.dataset.nav));
   }
+  initThemeToggle();
 
   // Poll right away when the tab becomes visible again instead of waiting out
   // the remaining interval. pollTick skips if a request is already in flight,

@@ -2,6 +2,10 @@
 #include "sdkconfig.h"
 #include "driver/rmt_tx.h"
 
+#if CONFIG_TARGET_LED_GPIO < 0
+#error "Set TARGET_LED_GPIO to the verified carrier-board WS2812 pin"
+#endif
+
 static rmt_channel_handle_t channel;
 static rmt_encoder_handle_t encoder;
 
@@ -11,7 +15,7 @@ esp_err_t target_led_set(bool on)
     {
         return ESP_ERR_INVALID_STATE;
     }
-    /* Green=on, black=off. GPIO8 is a WS2812 data signal, not a plain LED. */
+    /* Green=on, black=off. The configured GPIO carries WS2812 data, not a plain LED level. */
     uint8_t grb[3] = {on ? 96 : 0, 0, 0};
     rmt_symbol_word_t symbols[26];
     symbols[0] = (rmt_symbol_word_t){.duration0 = 1500, .duration1 = 1500};

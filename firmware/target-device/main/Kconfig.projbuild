@@ -21,6 +21,11 @@ config TARGET_POLL_MS
     default 500
 config TARGET_LED_GPIO
     int "Addressable RGB LED GPIO"
-    range 0 30
-    default 8
+    range -1 48 if IDF_TARGET_ESP32S3
+    range 0 30 if IDF_TARGET_ESP32C6
+    default -1 if IDF_TARGET_ESP32S3
+    default 8 if IDF_TARGET_ESP32C6
+    help
+        Set the verified carrier-board WS2812 pin before building for S3.
+        The module memory suffix does not identify the onboard LED pin.
 endmenu

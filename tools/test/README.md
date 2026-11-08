@@ -33,7 +33,7 @@ python3 web/scripts/build.py
   parser and pinned cJSON with ASan/UBSan. It covers truncated/oversized JSON,
   nesting, escapes, duplicates, unknown actions, invalid IDs and report bounds.
   Requires a C compiler and the downloaded managed dependency.
-- `test_device_server.py` runs ten stdlib tests against the real PC HTTP
+- `test_device_server.py` runs fifteen stdlib tests against the real PC HTTP
   service with a protocol-level device actor. It checks login/logout, LED
   on/off confirmation, missing/wrong acknowledgements, device/PC restarts,
   stale heartbeats, command contention, malformed requests and event logging.
@@ -57,3 +57,68 @@ stored in these tools. See [hardware acceptance](../../docs/testing.md) and
 the router and PC application separately; they do not implement all four
 original command-gateway evaluation categories or assert compliance with the
 original R1–R7 specification.
+
+## Browser API evaluation suite
+
+## Test categories
+
+The four categories below come from the evaluation plan in the first submittal
+(section V). Rename them here and in the directory names together if the plan
+is renumbered.
+
+| # | Category | Requirements | Scripts |
+|---|---|---|---|
+| 1 | Authorized operation | R6 | `login_success.py`, `status_reads.py`, `command_applies.py` |
+| 2 | Unauthorized access | R2, R7 | `no_token_refused.py`, `bad_password_refused.py`, `forged_token_refused.py`, `token_replay_after_logout.py`, `lockout_after_failures.py`, `restart_invalidates_sessions.py` |
+| 3 | Policy and isolation | R1, R3, R4 | `invalid_json_rejected.py`, `unknown_path_rejected.py`, `wrong_method_rejected.py`, `oversized_body_rejected.py`, `invalid_action_rejected.py`, `event_detail_has_no_secret.py` |
+| 4 | Rate limits and recovery | R4, R6, R7 | `command_rate_limit.py`, `link_down_refuses_command.py`, `target_unreachable_refuses_command.py`, `recovery_after_link_restore.py` |
+
+Directory layout:
+
+```
+tools/test/
+├── common.py                  shared client and PASS/FAIL reporter
+├── run_all.py                 runs every case script
+├── 1-authorized-operation/
+├── 2-unauthorized-access/
+├── 3-policy-and-isolation/
+└── 4-rate-limits-and-recovery/
+```
+
+## Running
+
+Against the mock server:
+
+```sh
+MOCK_PASSWORD=lab-password python3 web/mock/server.py &
+GATEWAY_USER=operator GATEWAY_PASSWORD=lab-password python3 tools/test/run_all.py
+```
+
+The full evaluation suite needs the standalone mock: restart/link-failure
+cases use `/__mock/` routes, which the real PC service deliberately disables.
+A passing mock run does not establish physical gateway isolation. For real
+service checks use `test_device_server.py` or the saved API harness above.
+Individual applicable evaluation scripts can take the real PC base URL:
+
+```sh
+GATEWAY_USER=... GATEWAY_PASSWORD=... python3 tools/test/1-authorized-operation/login_success.py http://192.168.78.10:8000
+```
+
+A single case can be run on its own, for example:
+
+```sh
+python3 tools/test/2-unauthorized-access/lockout_after_failures.py
+```
+
+## Conventions
+
+- One script per test case, named after what it checks
+  (e.g. `login_lockout.py`).
+- Each script prints PASS/FAIL per check and exits non-zero on any failure.
+- Credentials come from environment variables (`GATEWAY_USER`,
+  `GATEWAY_PASSWORD`), never from arguments that end up in shell history, and
+  never from committed files (R2).
+- Record results (date, firmware commit, outcome) in the test plan, not in
+  this directory.
+- A dropped connection is reported as status `0` and counts as a failure,
+  because the contract requires a JSON error body for every rejected request.

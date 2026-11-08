@@ -6,6 +6,7 @@ any depth and would hide a `web/build/` directory from git.
 | Script | What it does |
 |---|---|
 | `build.py` | Minifies `web/src` (pure Python), gzips each file into `web/dist/*.gz`, prints a size report, and fails if the gzipped total exceeds 60 KB or a forbidden API or external URL is used. `--keep-min` also writes the uncompressed minified files. |
+| `verify_littlefs.py` | Read-only legacy image verifier against `web/dist/`; optional `requirements-image.txt` dependency, unused by PC hosting. |
 | `mklittlefs.sh` | Legacy packer from the former onboard-hosting design. Packs `web/dist/` using the retained `www` partition size; requires `mklittlefs`. Unused by the separate web service. |
 
 ```sh

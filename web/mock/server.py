@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Development mock of the separate web service, serving web/src and its API.
 
-Implements docs/api-contract.md v0.2.0 with real behavior (token issuance and
+Implements docs/api-contract.md v0.3.1 with real behavior (token issuance and
 expiry, failed-login lockout, command rate limit, bounded event log, simulated
 LED) and adds /__mock/* endpoints for failure injection so R6 and R7 can be
 exercised without hardware. See web/mock/README.md.
@@ -27,7 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-API_VERSION = "0.2.0"
+API_VERSION = "0.3.1"
 
 HERE = Path(__file__).resolve().parent
 SRC_DIR = (HERE.parent / "src").resolve()
@@ -93,6 +93,7 @@ class MockGateway:
         self.command_times = deque()
         self.events = deque(maxlen=self.fx["event_log_capacity"])
         self.seq = 0
+        self.last_confirmed_command = None
 
     def uptime(self):
         return int(time.monotonic() - self.boot)
@@ -185,6 +186,7 @@ class MockGateway:
                 "link_ok": self.link_ok,
                 "uptime_s": self.uptime(),
                 "seq": self.seq,
+                "last_confirmed_command": self.last_confirmed_command,
             }
 
     def command(self, auth, body):
@@ -219,6 +221,8 @@ class MockGateway:
                 raise ApiError(502, "target_unreachable")
 
             self.output = ACTIONS[action]
+            self.last_confirmed_command = {"action": action, "output": self.output,
+                                           "service_uptime_s": self.uptime()}
             self._log("command", "allowed", "%s -> %s" % (action, self.output))
             return 200, {"result": "ok", "output": self.output}
 
