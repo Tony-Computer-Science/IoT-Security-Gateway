@@ -101,10 +101,34 @@ Wi-Fi settings and GPIO48 for compilation only; no S3 was flashed in this run.
 | Service restart | Old sessions returned 401, browser required login again, and the C6 resumed polling |
 | Events | Browser showed authentication, availability and confirmed-command entries; Allowed filtering worked |
 
-The final bench state is a reachable C6 with green output and a running PC
-service. Private credentials, generated firmware and detailed local logs are
+At the end of the application test, the C6 was reachable with green output
+and a running PC service. Private credentials, generated firmware and detailed local logs are
 not committed. A/B forwarding, gateway isolation, the final Windows setup and
 the third-board configuration remain separate acceptance work.
+
+### Shutdown and school configuration restoration — 2026-11-09
+
+After the bench test, LED OFF was acknowledged, the PC service was stopped,
+and the laptop's saved DHCP settings were reapplied. Board C's private
+configuration was restored to IoT-Gateway and the real demo endpoint
+`192.168.78.10:8000`, with the passphrase matching Board A. The connected C6
+was rebuilt and reflashed; flash hashes verified and its startup log confirmed
+that server endpoint. It was then left in programming mode with the output
+off, so its application and Wi-Fi remain stopped until reset or a power cycle.
+
+The bridge's private configuration now selects the school SSID, OWE and an empty
+passphrase. The saved laptop school profile reports OWE, so firmware now has
+an explicit Enhanced Open option. That mode requires protected management
+frames and rejects associations that are not OWE; personal WPA2/WPA3 remains
+the default and still requires a passphrase.
+
+Separate software validation passed: `bash ci/run.sh`, the sanitized gateway
+host tests, the C6 target build, a C6 bridge OWE build and an isolated S3 bridge
+personal-mode build with nonempty dummy credentials. No home PC endpoint is
+present in the restored target image or tracked configuration defaults.
+The prepared bridge image was not flashed onto the repurposed IoT-device C6.
+School-network association, DHCP, DNS, internet access and any campus admission
+requirements remain unverified until the actual bridge is tested at school.
 
 ## Merge integration checks — 2026-11-08
 

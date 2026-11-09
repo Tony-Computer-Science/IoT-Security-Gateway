@@ -107,15 +107,23 @@ static void attempt_connection(void)
 
 static void handle_association(const wifi_event_sta_connected_t *event)
 {
-    /* The scan threshold alone is insufficient: higher enum values include
-     * authentication modes such as OWE that do not use a personal password. */
+    /* The scan threshold alone cannot enforce the selected authentication mode. */
     wifi_auth_mode_t auth = event->authmode;
+#if CONFIG_GW_UPLINK_OWE
+    if (auth != WIFI_AUTH_OWE)
+    {
+        ESP_LOGW(TAG, "Rejected non-OWE authentication mode");
+        esp_wifi_disconnect();
+        return;
+    }
+#else
     if (auth != WIFI_AUTH_WPA2_PSK && auth != WIFI_AUTH_WPA3_PSK && auth != WIFI_AUTH_WPA2_WPA3_PSK)
     {
         ESP_LOGW(TAG, "Rejected non-personal/WPA2-WPA3 authentication mode");
         esp_wifi_disconnect();
         return;
     }
+#endif
 
     portENTER_CRITICAL(&status_lock);
     current_status.flags |= GW_ASSOCIATED;
@@ -244,12 +252,17 @@ esp_err_t uplink_wifi_start(void)
 {
     const char *ssid = CONFIG_GW_UPLINK_SSID;
     const char *password = CONFIG_GW_UPLINK_PASSWORD;
-    if (!strlen(ssid) || strlen(ssid) > 32 || strlen(password) < 8 || strlen(password) > 63)
+#if CONFIG_GW_UPLINK_OWE
+    bool credentials_valid = strlen(password) == 0;
+#else
+    bool credentials_valid = strlen(password) >= 8 && strlen(password) <= 63;
+#endif
+    if (!strlen(ssid) || strlen(ssid) > 32 || !credentials_valid)
     {
         portENTER_CRITICAL(&status_lock);
         current_status.flags = GW_CONFIG_ERROR;
         portEXIT_CRITICAL(&status_lock);
-        ESP_LOGE(TAG, "Set SSID (1-32 bytes) and passphrase (8-63 bytes) in menuconfig");
+        ESP_LOGE(TAG, "Set SSID and credentials for the selected upstream authentication mode");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -283,9 +296,15 @@ esp_err_t uplink_wifi_start(void)
     wifi_config_t config = {0};
     memcpy(config.sta.ssid, ssid, strlen(ssid));
     memcpy(config.sta.password, password, strlen(password));
+#if CONFIG_GW_UPLINK_OWE
+    config.sta.threshold.authmode = WIFI_AUTH_OPEN;
+    config.sta.owe_enabled = true;
+    config.sta.pmf_cfg.required = true;
+#else
     config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
     config.sta.pmf_cfg.required = false;
     config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
+#endif
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &config));
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));

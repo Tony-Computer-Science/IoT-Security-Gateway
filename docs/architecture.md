@@ -5,7 +5,7 @@ Client devices
     | WPA2 personal Wi-Fi (AES/CCMP)
 Board A: private AP, client DHCP, NAT onto its SPI address
     | SPI2: SCLK/MOSI/MISO/CS/HS, no additional network connection
-Board B: virtual Ethernet -> IPv4 NAPT -> personal Wi-Fi station
+Board B: virtual Ethernet -> IPv4 NAPT -> personal or OWE Wi-Fi station
     | existing Wi-Fi router
 Upstream LAN / internet
 ```
