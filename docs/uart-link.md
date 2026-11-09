@@ -28,9 +28,12 @@ Rebuild and flash **both** boards. Tracked defaults continue to select SPI;
 local sdkconfig stores the UART selection. Do not repeat `set-target` for a
 transport change because it resets other configuration.
 
-Wi-Fi credentials remain required: configure the station AP passphrase and
-bridge upstream SSID/passphrase in their own menuconfig sections. An empty
-password builds but leaves the corresponding Wi-Fi path unavailable.
+Configure the station AP passphrase and bridge upstream SSID in their own
+menuconfig sections. The station AP and the bridge's default WPA2/WPA3
+personal mode require valid passphrases. For a passwordless Enhanced Open
+uplink, explicitly select the bridge's OWE option and leave only its upstream
+passphrase empty; see [bridge configuration](../firmware/bridge-board/README.md#configure-and-build).
+The transport and station AP settings are unchanged by that choice.
 
 ## Stream format and behavior
 

@@ -130,6 +130,30 @@ The prepared bridge image was not flashed onto the repurposed IoT-device C6.
 School-network association, DHCP, DNS, internet access and any campus admission
 requirements remain unverified until the actual bridge is tested at school.
 
+### Three-C6 deployment — 2026-11-09
+
+With all three C6 boards connected, chip identification confirmed C6 revision
+0.0 on each port before flashing. The existing station kept its role, the
+temporarily repurposed IoT board was restored to bridge, and the new board's
+blink demonstration was replaced with the IoT target. All three ESP-IDF 6.1
+builds passed; all bootloader, partition-table and application flash hashes
+verified. Startup logs confirmed blue station, red bridge and the target
+polling the real demo endpoint. Private USB identifiers and raw logs are not
+committed.
+
+The bridge associated to the school uplink using WPA3-OWE with protected
+management frames and received an IPv4 lease. The IoT target associated to
+the station AP and received a client lease. These are physical radio/DHCP
+observations, separate from software validation.
+
+Both gateway startup logs selected UART TX=6, RX=7 at 921600 baud. During the
+initial observation and follow-up, their handshake did not complete and
+forwarding remained closed. Physical jumper verification was requested for
+blue GPIO6 to red GPIO7, blue GPIO7 to red GPIO6 and common ground. The target
+needs no signal jumpers. Internet forwarding, the PC/portal test on this
+three-board arrangement and gateway isolation remain unverified. The PC was
+left on its existing school connection while the UART path was unavailable.
+
 ## Merge integration checks — 2026-11-08
 
 The PR #6 integration preserves main's events/theme/live-monitoring behavior
