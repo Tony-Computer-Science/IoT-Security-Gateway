@@ -1,8 +1,18 @@
 menu "Bridge upstream Wi-Fi"
 config GW_UPLINK_SSID
-    string "Upstream SSID (2.4 GHz personal Wi-Fi)"
+    string "Upstream SSID (2.4 GHz Wi-Fi)"
     default ""
+config GW_UPLINK_OWE
+    bool "Use Enhanced Open / OWE (no passphrase)"
+    depends on ESP_WIFI_ENABLE_WPA3_OWE_STA
+    default n
+    help
+        Select for passwordless Enhanced Open networks. Leave the upstream
+        passphrase empty.
+        Only OWE associations are accepted; unencrypted Open, personal and
+        enterprise authentication are not accepted in this mode.
+        When disabled, WPA2/WPA3 personal and a passphrase are required.
 config GW_UPLINK_PASSWORD
-    string "Upstream WPA2/WPA3 passphrase (never commit sdkconfig)"
+    string "Upstream WPA2/WPA3 passphrase (empty for OWE; private sdkconfig)"
     default ""
 endmenu

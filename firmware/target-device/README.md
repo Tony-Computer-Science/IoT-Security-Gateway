@@ -90,6 +90,9 @@ on a carrier board: confirm its GPIO if using a different development board.
   The website reports success only after a matching acknowledgement. Duplicate
   delivery of the most recently attempted command ID does not apply it twice;
   the board keeps only that last ID, not a history of all commands.
+- WPA3 connections enable both SAE password-element methods, matching the
+  bridge's upstream configuration. Wi-Fi disconnect logs include the reason
+  code without credentials.
 - Wi-Fi/HTTP outages retain the output and retry with bounded delays. New
   device boot IDs invalidate pending commands; expired work is not queued
   for later replay. A lost confirmation can leave an unknown result, which
@@ -105,9 +108,12 @@ upstream routing is tested separately.
 The C6 firmware build passed on 2026-11-05. Sanitized C response-parser tests,
 ten real-HTTP server tests, and twelve Postman requests / 23 assertions were
 rerun successfully on 2026-11-08; see the [software validation record](../../docs/testing.md#recorded-local-software-validation--2026-11-08).
-The HTTP tests use a protocol-level device actor, not C6 hardware. This image
-has not yet been flashed onto the C6 third board; its radio, LED and Windows
-integration still need the acceptance steps above. The separate S3 bench
+The HTTP tests use a protocol-level device actor, not C6 hardware. A repurposed
+C6 passed a separate home-network portal bench on 2026-11-09, including
+operator-confirmed green output, command acknowledgements and restart recovery;
+see the [C6 bench record](../../docs/testing.md#recorded-c6-home-network-portal-bench--2026-11-09).
+The third C6 and Windows integration on IoT-Gateway still need the acceptance
+steps above. The separate S3 bench
 test recorded physical on/off and heartbeat/restart recovery on 2026-11-07;
 see [that evidence](../../docs/s3-test-evidence.md). It does not establish
 acceptance of the gateway's fixed-IP Windows setup.

@@ -67,6 +67,97 @@ S3 or C6 (configure the verified carrier LED pin for S3). Choose the matching `i
 `idf.py set-target esp32c6` on initial configuration. Set-target resets
 sdkconfig, so configure credentials afterward. See the [firmware index](../firmware/README.md).
 
+## Recorded C6 home-network portal bench — 2026-11-09
+
+One C6 previously running the red bridge role was temporarily flashed with
+`target-device`. The Linux laptop hosted the existing PC service on its
+home-network IPv4 address, held static for the active Wi-Fi session. The saved
+laptop Wi-Fi profile remains DHCP; reconnecting or rebooting restores that
+profile. This bench bypasses A/B and does not change the gateway demo's
+`192.168.78.10:8000` endpoint.
+
+On the separate home IoT network, the C6 associated and obtained DHCP. The
+laptop received four of four ping replies, but device-initiated HTTP polls
+to the laptop timed out. This demonstrates an unusable application path in
+that arrangement, not proof of which router or firewall rule caused it.
+
+On the home main network, WPA3 authentication initially failed repeatedly.
+Explicitly selecting both SAE password-element methods, as the bridge already
+does, allowed association, DHCP and real device polling. Wi-Fi disconnects now
+log their reason code without logging credentials.
+
+Software validation passed separately: `bash ci/run.sh` (22 service tests,
+eight browser-client tests, sanitized target parser and web asset checks),
+and ESP-IDF 6.1 target builds for C6 and S3. The S3 build used nonempty dummy
+Wi-Fi settings and GPIO48 for compilation only; no S3 was flashed in this run.
+
+| Physical C6 / browser check | Observation |
+|---|---|
+| Login and heartbeat | Browser sign-in succeeded; target became reachable and controls enabled |
+| Output commands | Browser ON/OFF commands received matching device confirmations and status updates |
+| Green output | Operator visually confirmed the controllable RGB LED was green after ON; optical OFF was not separately confirmed |
+| Missing heartbeats | Pausing the C6 for more than eight seconds marked the target unavailable and disabled controls |
+| Device restart | Restarted C6 rejoined Wi-Fi and restored fresh reports without reflashing |
+| Service restart | Old sessions returned 401, browser required login again, and the C6 resumed polling |
+| Events | Browser showed authentication, availability and confirmed-command entries; Allowed filtering worked |
+
+At the end of the application test, the C6 was reachable with green output
+and a running PC service. Private credentials, generated firmware and detailed local logs are
+not committed. A/B forwarding, gateway isolation, the final Windows setup and
+the third-board configuration remain separate acceptance work.
+
+### Shutdown and school configuration restoration — 2026-11-09
+
+After the bench test, LED OFF was acknowledged, the PC service was stopped,
+and the laptop's saved DHCP settings were reapplied. Board C's private
+configuration was restored to IoT-Gateway and the real demo endpoint
+`192.168.78.10:8000`, with the passphrase matching Board A. The connected C6
+was rebuilt and reflashed; flash hashes verified and its startup log confirmed
+that server endpoint. It was then left in programming mode with the output
+off, so its application and Wi-Fi remain stopped until reset or a power cycle.
+
+The bridge's private configuration now selects the school SSID, OWE and an empty
+passphrase. The saved laptop school profile reports OWE, so firmware now has
+an explicit Enhanced Open option. That mode requires protected management
+frames and rejects associations that are not OWE; personal WPA2/WPA3 remains
+the default and still requires a passphrase.
+
+Separate software validation passed: `bash ci/run.sh`, the sanitized gateway
+host tests, the C6 target build, a C6 bridge OWE build and an isolated S3 bridge
+personal-mode build with nonempty dummy credentials. No home PC endpoint is
+present in the restored target image or tracked configuration defaults.
+The prepared bridge image was not flashed onto the repurposed IoT-device C6.
+School-network association, DHCP, DNS, internet access and any campus admission
+requirements remain unverified until the actual bridge is tested at school.
+
+### Three-C6 deployment — 2026-11-09
+
+With all three C6 boards connected, chip identification confirmed C6 revision
+0.0 on each port before flashing. The existing station kept its role, the
+new board's blink demonstration was replaced with bridge firmware to match
+the physical jumper pair, and the earlier target retained its role. All three ESP-IDF 6.1
+builds passed; all bootloader, partition-table and application flash hashes
+verified. Startup logs confirmed blue station, red bridge and the target
+polling the real demo endpoint. Private USB identifiers and raw logs are not
+committed.
+
+The bridge associated to the school uplink using WPA3-OWE with protected
+management frames and received an IPv4 lease. The IoT target associated to
+the station AP and received a client lease. These are physical radio/DHCP
+observations, separate from software validation.
+
+Both gateway startup logs selected UART TX=6, RX=7 at 921600 baud. After the
+role assignment matched the physical jumper pair, both gates opened. The
+bridge's upstream DNS/HTTP probes and the station's DNS/HTTP probes through
+UART passed. The target needs no signal jumpers.
+
+The Linux laptop joined the station AP at the configured fixed UI address.
+Its internet HTTP check passed, the real portal accepted login and received
+fresh target reports, and a browser ON command received a matching device
+acknowledgement. Full three-board restart/soak testing and gateway isolation
+were not established by this check. A later SPI/isolation change is separate
+from these UART observations.
+
 ## Merge integration checks — 2026-11-08
 
 The PR #6 integration preserves main's events/theme/live-monitoring behavior

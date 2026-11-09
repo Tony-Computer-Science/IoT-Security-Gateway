@@ -57,7 +57,8 @@ Keep passwords in private configuration, not this README.
    Open `http://example.com` and confirm the page loads; do not rely only on
    the phone's connection label. If it fails, check that the phone joined
    **IoT-Gateway** and that bridge joined the intended upstream network
-   (**Tony IoT** in this lab) with a valid IP address. Use the troubleshooting
+   (the configured school network, using passwordless OWE) with
+   a valid IP address. Use the troubleshooting
    table below before proceeding with the internet test.
 3. **Connect the computer that will host the web service.** Join that computer
    to **IoT-Gateway** too. On the Windows demo PC, set Wi-Fi IPv4 to
@@ -130,8 +131,9 @@ deployment. The current device channel is lab-only plain HTTP; see the
 
 ## Current status
 
-- Board B implements personal WPA2/WPA3 uplink, DHCP/reconnection, a bounded
-  Ethernet-over-SPI/UART transport, IPv4 routing/NAPT, and restart isolation.
+- Board B implements personal WPA2/WPA3 or passwordless OWE uplink,
+  DHCP/reconnection, a bounded Ethernet-over-SPI/UART transport, IPv4
+  routing/NAPT, and restart isolation.
 - `firmware/spi-test-host` is a separate Board A test image. Its radio stays
   off; DNS/HTTPS and configurable TCP/UDP echo tests use SPI only.
 - Board A implements an AP-only WPA2/AES network, DHCP, DNS propagation and
