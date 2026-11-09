@@ -295,9 +295,10 @@ For the physical target, use `web/device_server.py` with Board C and the
 fixed-address PC. Follow [Board C's acceptance steps](../firmware/target-device/README.md#behavior-and-verification):
 confirm physical green/off output, availability after disconnect/reconnect,
 device restart and service restart. Browser login and command validation are
-implemented in the PC service. Device authentication, TLS and per-client
-network policy remain unimplemented; WPA2 admission does not establish
-compliance with the original security requirements.
+implemented in the PC service. The deployed target channel requires mutual TLS, and its IPv4 policy admits
+PC application traffic plus DHCP and local ping. Verify these boundaries
+separately using [the isolation guide](device-isolation.md); WPA2 admission
+alone does not establish compliance with the original security requirements.
 
 ## Production Board A acceptance — partial C6 UART validation
 
@@ -337,3 +338,52 @@ peer-client isolation or application authorization as a passing test.
 
 For multiple clients, Windows UI static addressing, and outside-initiated
 connection checks, also follow [the client-network procedure](client-network.md).
+
+
+## Recorded C6 SPI and authenticated target bench — 2026-11-09
+
+Three ESP32-C6 rev 0.0 development boards use station blue, bridge red and
+controllable target green (GPIO8). Private sdkconfig, identities, binaries
+and detailed serial logs are excluded from Git. The UI/API remains on the
+fixed-address PC; the target uses its separate mutual-TLS device listener.
+
+The working physical SPI variant maps station SCLK GPIO7 to bridge SCLK
+GPIO6, station MOSI GPIO6 to bridge MOSI GPIO7, with MISO2, CS18, HS19 and
+common GND matched at both ends. These pin selections are saved in private
+menuconfig; the published standard C6 wiring/defaults are unchanged. Keep
+this bench wiring as configured. Both boards use mode 0 at 4 MHz, completed
+12800-bit frames, and reported zero malformed frames during the recorded
+short DNS/HTTP checks. Pairing rejects during startup are distinct from
+malformed wire frames. CRC is not authentication of the physical link.
+
+The laptop and target joined the AP. The real target confirmed ON/OFF/ON
+over mutual TLS. After the ping-policy update, authorized PC ping and a
+second source-IP alias ping to the target both passed. That alias received
+`403 pc_only` from the UI/API. Plain HTTP device polling was rejected and a
+TLS client lacking a client certificate was denied. The final report was
+fresh and ON. The operator independently confirmed that the UI controlled
+the target. An IP alias is not a second physical radio client or a complete
+spoofing test; ARP/shared-airtime interference remains outside this test.
+
+The PC initially failed repeated Wi-Fi associations despite clean SPI
+frames and ample free heap. The station was rebuilt/flashed with explicit
+20 MHz B/G/N AP operation; the next PC association and live control passed.
+This is a compatibility observation, not proof of a driver root cause or a
+long-term recovery/soak pass. Do not substitute it for the pending checklist.
+
+The operator reported roughly 750 kbps while pages loaded. A separate
+524288-byte HTTPS download completed with certificate validation enabled:
+6.51 s setup and 6.97 s body transfer, approximately 0.60 Mbps during the body
+and 0.31 Mbps including setup. This measures the current laptop/upstream
+path, not standalone SPI capacity. The 4 MHz clock is 4 Mbps raw signaling,
+not an achieved internet rate. Normal browsing latency remains a limitation.
+
+Validation after the changes: portable CI passed 22 service tests, 10 real
+TLS/admission tests, 8 browser-client tests, sanitized target parser and
+IPv4 policy tests, and the asset build (13348 bytes gzip). The saved Postman
+collection passed 12 requests / 24 assertions against a software actor. Gateway host
+protocol/session/firewall tests passed. ESP-IDF 6.1 built station/bridge C6,
+S3 SPI test-host and C6/S3 target images. The final C6 station and target
+updates were flashed with hash verification; S3 target was compile-only.
+Windows firewall/static-IP acceptance, a second physical unauthorized client,
+SPI reset/cable-loss acceptance and extended soak remain pending.

@@ -1,6 +1,6 @@
 # REST API contract
 
-**Version: 0.3.2**
+**Version: 0.4.0**
 
 This is the interface between the web interface (`web/`) and the **separate
 web service**, hosted outside the ESP32 boards. For simplicity, the demo runs
@@ -15,8 +15,9 @@ website, backed by an outbound-polling Board C. Its device channel is specified
 in [device API](device-api.md). Follow [Setting Up](../README.md#setting-up)
 for the fixed-IP PC demo and [S3 live test](s3-live-test.md) for S3 bench details.
 Board A and Board B provide networking; Board C controls
-the LED. The service does not authenticate the intentionally vulnerable target
-or claim the original gateway-only security architecture.
+the LED. The real service authenticates the target through mutual TLS and
+restricts browser access to the hosting PC. This does not establish the
+original gateway-only security architecture or physical isolation acceptance.
 
 Versioning follows semver. Before 1.0.0, a minor bump (0.x.0) may break
 compatibility, and a patch bump (0.0.x) must not.
@@ -27,7 +28,8 @@ compatibility, and a patch bump (0.0.x) must not.
 
 | Rule | Detail |
 |---|---|
-| Transport | Local-computer demo: HTTP port 8000 on the private station subnet. Mock: HTTP localhost. The current service does not implement TLS. |
+| Transport | PC-local browser traffic uses HTTP port 8000; the separate device channel uses mutual TLS on 8443. Mock: HTTP localhost. |
+| PC admission | UI/API connections must originate from the bound PC address or IPv4 loopback. Other sources receive 403 `{ "error": "pc_only" }`, including before login. The CLI mock applies the same browser restriction. |
 | Encoding | All request and response bodies are JSON (`Content-Type: application/json`), UTF-8. |
 | Authentication | Every endpoint except `POST /api/login` requires `Authorization: Bearer <token>`. |
 | Paths | Clients always use **relative** paths such as `/api/status`. Never hardcode a scheme, host, or port. |
@@ -261,6 +263,14 @@ are current lab service limits, not firmware-wide security guarantees.
 ---
 
 ## 5. Changelog
+
+### 0.4.0 — PC-only access and authenticated target
+
+- Restrict UI/API access to the hosting PC; remote AP browsers receive 403
+  `pc_only`. Login, control and events retain their existing fields and behavior
+  for permitted PC clients. The CLI mock enforces the same admission rule.
+- Move real device polls to mutual TLS, as specified by device API 0.2.0.
+  A plaintext poll cannot create or refresh target state.
 
 ### 0.3.2 — distinct device failures and reserved device capacity
 

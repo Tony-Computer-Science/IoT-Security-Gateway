@@ -27,7 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-API_VERSION = "0.3.2"
+API_VERSION = "0.4.0"
 
 HERE = Path(__file__).resolve().parent
 SRC_DIR = (HERE.parent / "src").resolve()
@@ -347,6 +347,10 @@ class Handler(BaseHTTPRequestHandler):
     # --- dispatch -------------------------------------------------------------
 
     def dispatch(self, method):
+        if (getattr(self.server, "local_ui_only", False)
+                and self.client_address[0] not in ("127.0.0.1", self.server.server_address[0])):
+            self.send_json(403, {"error": "pc_only"})
+            return
         parts = urlsplit(self.path)
         path, self.query = parts.path, parts.query
 
@@ -431,6 +435,7 @@ def main():
     Handler.gateway = MockGateway(FIXTURES, password)
     Handler.quiet = args.quiet
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
+    httpd.local_ui_only = True
     base = "http://%s:%d" % (args.host, args.port)
 
     print("IoT gateway mock server (API contract v%s)" % API_VERSION)

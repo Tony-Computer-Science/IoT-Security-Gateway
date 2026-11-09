@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """Local lab UI/API backed by a real, outbound-polling Board C.
 
-Browser authentication remains required. The device channel is intentionally
-unauthenticated plain HTTP, matching the evaluation target's lab-only design.
+The CLI exposes the UI only to the PC itself and uses mutually authenticated
+TLS for the target. The plain HTTP handler remains available to local test actors.
 """
 import argparse
+import hashlib
+import ipaddress
 import json
 import math
 import os
 from pathlib import Path
 import re
 import secrets
+import ssl
 import sys
 import threading
 import time
 from http.server import ThreadingHTTPServer
+from socketserver import TCPServer
 from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -207,8 +211,29 @@ class DeviceHandler(Handler):
         super().setup()
         self.connection.settimeout(6)
 
+    def end_headers(self):
+        if getattr(self.server, "tls_context", None) is not None:
+            self.send_header("X-Device-Time", str(int(time.time())))
+        super().end_headers()
+
     def dispatch(self, method):
         path = urlsplit(self.path)
+        if getattr(self.server, "tls_context", None) is not None:
+            certificate = self.connection.getpeercert(binary_form=True)
+            if (not certificate or not secrets.compare_digest(
+                    hashlib.sha256(certificate).digest(), self.server.device_fingerprint)):
+                self.send_json(403, {"error": "device_identity_required"})
+                return
+            if not path.path.startswith("/device/"):
+                self.send_json(404, {"error": "not_found"})
+                return
+        elif self.server.local_ui_only:
+            if path.path.startswith("/device/"):
+                self.send_json(403, {"error": "device_tls_required"})
+                return
+            if self.client_address[0] not in ("127.0.0.1", self.server.server_address[0]):
+                self.send_json(403, {"error": "pc_only"})
+                return
         if path.path.startswith("/__mock/"):
             self.send_json(404, {"error": "not_found"})
             return
@@ -251,11 +276,22 @@ class DeviceHTTPServer(ThreadingHTTPServer):
     """
     daemon_threads = True
 
-    def __init__(self, *args, total_slots=24, device_slots=8, **kwargs):
+    def server_bind(self):
+        # A fixed-IP local service must start even when upstream DNS is unavailable.
+        TCPServer.server_bind(self)
+        self.server_name = self.server_address[0]
+        self.server_port = self.server_address[1]
+
+    def __init__(self, *args, total_slots=24, device_slots=8, local_ui_only=True, **kwargs):
         if not 0 < device_slots < total_slots:
             raise ValueError("device_slots must be between 1 and total_slots - 1")
+        address = args[0] if args else kwargs["server_address"]
+        if (not local_ui_only and getattr(self, "tls_context", None) is None
+                and not ipaddress.ip_address(address[0]).is_loopback):
+            raise ValueError("Unauthenticated device actors are loopback-only")
         self.slots = threading.BoundedSemaphore(total_slots)
         self.browser_slots = threading.BoundedSemaphore(total_slots - device_slots)
+        self.local_ui_only = local_ui_only
         super().__init__(*args, **kwargs)
 
     def process_request(self, request, client_address):
@@ -275,28 +311,77 @@ class DeviceHTTPServer(ThreadingHTTPServer):
             self.slots.release()
 
 
+class DeviceTLSServer(DeviceHTTPServer):
+    """Accept quickly; each bounded worker performs its own TLS handshake."""
+
+    def __init__(self, *args, tls_context, device_fingerprint, **kwargs):
+        self.tls_context = tls_context
+        self.device_fingerprint = device_fingerprint
+        super().__init__(*args, **kwargs)
+
+    def get_request(self):
+        connection, address = super().get_request()
+        connection.settimeout(6)
+        try:
+            return self.tls_context.wrap_socket(
+                connection, server_side=True, do_handshake_on_connect=False), address
+        except BaseException:
+            connection.close()
+            raise
+
+
+def device_tls_context(directory):
+    directory = Path(directory)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.load_cert_chain(directory / "server.pem", directory / "server.key")
+    context.load_verify_locations(cafile=directory / "ca.pem")
+    context.verify_mode = ssl.CERT_REQUIRED
+    certificate = ssl.PEM_cert_to_DER_cert((directory / "device.pem").read_text())
+    return context, hashlib.sha256(certificate).digest()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="192.168.78.10")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--device-id", default="iot-c6")
+    parser.add_argument("--device-port", type=int, default=8443)
+    parser.add_argument("--identity-dir", type=Path,
+                        default=Path(__file__).resolve().parents[1] / "local-backups/device-identity")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
-    if not DEVICE_ID.fullmatch(args.device_id) or not 1 <= args.port <= 65535:
+    if (not DEVICE_ID.fullmatch(args.device_id) or not 1 <= args.port <= 65535
+            or not 1 <= args.device_port <= 65535 or args.device_port == args.port):
         parser.error("invalid device ID or port")
+    try:
+        address = ipaddress.IPv4Address(args.host)
+        if address.is_unspecified or address.is_multicast:
+            raise ValueError("bind a specific PC IPv4 address")
+        tls_context, fingerprint = device_tls_context(args.identity_dir)
+    except (ValueError, OSError, ssl.SSLError) as error:
+        parser.error("Configure a specific PC address and private device identities: %s" % error)
     configured_password = os.environ.get("UI_PASSWORD")
     password = configured_password or secrets.token_urlsafe(12)
     DeviceHandler.gateway = DeviceGateway(FIXTURES, password, args.device_id)
     DeviceHandler.quiet = args.quiet
-    with DeviceHTTPServer((args.host, args.port), DeviceHandler) as server:
+    with DeviceHTTPServer((args.host, args.port), DeviceHandler, local_ui_only=True) as server, \
+            DeviceTLSServer((args.host, args.device_port), DeviceHandler, tls_context=tls_context,
+                            device_fingerprint=fingerprint) as device_server:
+        device_worker = threading.Thread(target=device_server.serve_forever, daemon=True)
+        device_worker.start()
         print("IoT device UI: http://%s:%d/" % (args.host, args.port))
         print("Username: %s" % FIXTURES["username"])
         print("Password: %s" % ("(from UI_PASSWORD)" if configured_password else password))
-        print("Waiting for device %s; lab-only unauthenticated HTTP device channel" % args.device_id)
+        print("PC-only UI; device %s uses mutual TLS on port %d" %
+              (args.device_id, args.device_port))
         try:
             server.serve_forever()
         except KeyboardInterrupt:
             pass
+        finally:
+            device_server.shutdown()
+            device_worker.join(7)
 
 
 if __name__ == "__main__":

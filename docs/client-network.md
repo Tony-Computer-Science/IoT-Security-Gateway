@@ -5,7 +5,7 @@
 Station's default IoT-Gateway AP accepts **four simultaneous Wi-Fi clients**,
 including the UI computer. Maximum associated clients is configurable from
 1 to 10 under **Station board WPA2 access point**. DHCP address count does not
-increase the Wi-Fi association limit. All clients share the UART link's
+increase the Wi-Fi association limit. All clients share the selected SPI/UART link's
 bandwidth. Its queue is bounded; heavy simultaneous traffic can cause drops.
 
 | Role | Address |
@@ -56,27 +56,29 @@ for version-specific field names. Return the Wi-Fi IP assignment to DHCP when
 using this adapter on a different network if the Windows version applies the
 manual settings to the adapter rather than just this saved network.
 
-Bind the UI service to **192.168.78.10**, and allow its TCP port through the
+Bind the UI service to **192.168.78.10**, and allow the device TLS port **8443** through the
 Windows firewall only from **192.168.78.0/24**. To serve the existing website
-and control the third C6, run from the repository root:
+and control the third C6, provision identities once using
+[PC-only isolation](device-isolation.md), then run from the repository root:
 
 ```powershell
 python web/device_server.py --host 192.168.78.10 --port 8000
 ```
 
 Sign in at `http://192.168.78.10:8000/` with username `operator` and the
-password printed by the service. Board C initiates polls to this address;
+password printed by the service. Board C initiates mutual-TLS polls to this address on port 8443;
 the PC does not initiate connections to the board. See
 [Board C setup](../firmware/target-device/README.md) and the
 [device API](device-api.md). A scoped firewall rule, run in Administrator
 PowerShell, is:
 
 ```powershell
-New-NetFirewallRule -DisplayName "IoT Gateway UI TCP 8000" -Direction Inbound -Action Allow -Protocol TCP -LocalAddress 192.168.78.10 -LocalPort 8000 -RemoteAddress 192.168.78.0/24 -Profile Any
+New-NetFirewallRule -DisplayName "IoT Gateway device TLS 8443" -Direction Inbound -Action Allow -Protocol TCP -LocalAddress 192.168.78.10 -LocalPort 8443 -RemoteAddress 192.168.78.0/24 -Profile Any
 ```
 
 Use the real application's port when it differs. This rule adds access for
-station Wi-Fi clients; it does not change other existing firewall rules. See
+authenticated target polls; it does not change other existing firewall rules.
+The UI stays on port 8000 and admits only connections originating on the PC. See
 [Microsoft's firewall rule reference](https://learn.microsoft.com/en-us/powershell/module/netsecurity/new-netfirewallrule?view=windowsdefender).
 
 ## Connection direction and boundaries
@@ -95,9 +97,11 @@ are blocked at bridge; direct packets into the station client subnet are
 blocked at station. This is outbound-initiated connectivity, not one-way data.
 
 The Windows UI PC is **inside** the protected Wi-Fi network. Other clients
-can reach it directly over the AP, and UI replies can return. This setup does
-not isolate associated clients from each other at layer 2 or authenticate each
-IoT application. Anyone admitted to the AP is inside that local boundary.
+can address it directly over the AP, but its UI/API rejects non-PC sources.
+The target requires mutual TLS for reports/commands and filters IPv4 sources,
+with DHCP and local ICMP echo as exceptions. Other clients keep internet
+access. This does not isolate associated clients at layer 2; see the
+[packet boundary and limits](device-isolation.md#packet-boundary-and-limits).
 No router port forwarding, UPnP mapping or public tunnel is needed for the UI.
 
 ## Verification
@@ -106,8 +110,11 @@ No router port forwarding, UPnP mapping or public tunnel is needed for the UI.
    `connected=2/4` or a higher count if other devices are present.
 2. Check the PC has .10 and the DHCP phone has .100–.199. Reconnect/reboot the
    PC and confirm .10 remains fixed. Two manual clients must not share .10.
-3. From the phone, load `http://192.168.78.10:8000/` when using the development
-   server above. Verify internet access from both clients separately.
+3. From the PC, sign in at `http://192.168.78.10:8000/` and verify target
+   control. A phone reaching that listener must receive `403 pc_only`; a
+   firewall may instead block it. Verify internet from both clients separately.
+   Pings to the target from the AP subnet are allowed; application traffic
+   still requires the configured PC and mutual TLS.
 4. From a device outside IoT-Gateway, attempt a new connection to the PC/client
    subnet and bridge's upstream address. There is no forwarded UI endpoint.
    Verify existing client-initiated connections still receive responses.

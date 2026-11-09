@@ -33,7 +33,8 @@ The website and its API are a **separate service running outside the ESP32
 boards**. For simplicity, this demo runs that service on a local computer
 instead of a dedicated server: **the computer acts as the server**. It joins
 **IoT-Gateway** and serves the UI/API at **http://192.168.78.10:8000/**.
-Board C has that server IPv4 address and port **compiled into its firmware**
+Board C has that server IPv4 address and device TLS port **8443**
+**compiled into its firmware**
 from menuconfig (`TARGET_UI_HOST` / `TARGET_UI_PORT`); it does not discover
 the server automatically. Board C contacts it over Wi-Fi; station and bridge
 provide networking. No ESP32 hosts the website or browser API.
@@ -43,12 +44,16 @@ Before the first run, build/configure and flash each board using the
 [bridge](firmware/bridge-board/README.md) and
 [IoT device](firmware/target-device/README.md) instructions. Bridge needs the
 upstream Wi-Fi credentials; Board C needs the separate station AP password.
-Keep passwords in private configuration, not this README.
+Provision private device identities before the target build using
+[PC-only isolation](docs/device-isolation.md). Keep passwords and identities
+in private configuration, not this README.
 
 1. **Power on station and bridge.** Keep their configured wired link connected.
-   For the current two-wire UART demo, connect station GPIO6 TX to bridge GPIO7
-   RX, station GPIO7 RX to bridge GPIO6 TX, and GND to GND. Both must use UART
-   at 921600 baud; see [wiring and configuration](docs/uart-link.md).
+   For SPI, match each configured signal at both ends, including handshake and
+   common ground; see [C6 wiring](hardware/docs/README.md#esp32-c6-development-board-wiring).
+   The current bench uses a private pin-map variant recorded in
+   [testing](docs/testing.md). UART is an optional alternative and requires
+   matching mode/baud and crossed TX/RX; see [UART wiring](docs/uart-link.md).
    Each board also needs USB power. Check the controllable RGB LEDs against
    the table below. Their identity colors do not prove Wi-Fi or internet access.
 2. **Join the station network from a phone and check internet access.** In
@@ -74,8 +79,8 @@ Keep passwords in private configuration, not this README.
    python web/device_server.py --host 192.168.78.10 --port 8000
    ```
 
-   Leave the terminal open. Allow TCP 8000 from **192.168.78.0/24** using the
-   scoped firewall rule in the Windows guide. On the PC or the phone, open
+   Leave the terminal open. Allow the device TLS listener on TCP 8443 using the
+   scoped firewall rule in the Windows guide. On the PC, open
    `http://192.168.78.10:8000/`. Sign in as **operator** with the password
    printed by the service. This login password is separate from the Wi-Fi
    password. Use `device_server.py` for hardware control; the mock server
@@ -83,7 +88,9 @@ Keep passwords in private configuration, not this README.
    and disabled command buttons are expected.
 5. **Power on the third C6, the IoT device.** Its firmware must have the
    **IoT-Gateway** SSID/passphrase, service address **192.168.78.10**, port
-   **8000**, and device ID **iot-c6**. It joins Wi-Fi automatically and polls
+   **8443** for the authenticated device channel, and device ID **iot-c6**.
+   Provision identities before building as described in
+   [PC-only isolation](docs/device-isolation.md). It joins Wi-Fi automatically and polls
    the service; it needs no signal jumpers to the other boards. Wait for
    reachable status in the website, then click **Turn on**: its controllable
    RGB LED should become **green** after device confirmation. Click **Turn
@@ -106,10 +113,10 @@ If a check fails:
 | Symptom | What to check |
 |---|---|
 | Wrong board color or IoT-Gateway is missing | Confirm power, board labels and the correct firmware image. Check AP configuration and startup logs; a power light alone does not identify the firmware. |
-| Phone joins but a webpage cannot load | Confirm mobile data is off, the phone joined IoT-Gateway and DHCP gave it 192.168.78.100–199 with gateway .1. Check bridge's upstream SSID/password and IP, and test that upstream network's internet separately. Check crossed UART wires, common ground and matching UART mode/baud. After bridge is online, reconnect the phone to refresh DHCP/DNS. |
+| Phone joins but a webpage cannot load | Confirm mobile data is off, the phone joined IoT-Gateway and DHCP gave it 192.168.78.100–199 with gateway .1. Check bridge's upstream SSID/password and IP, and test that upstream network's internet separately. Check the selected SPI signal mapping/handshake and common ground, or crossed UART wires and matching mode/baud if UART is selected. After bridge is online, reconnect the phone to refresh DHCP/DNS. |
 | Service fails to bind to 192.168.78.10 | Confirm the service PC joined IoT-Gateway and .10 is assigned to its Wi-Fi adapter before launch. Check another program is not already using port 8000. |
-| Website opens on the PC but not on the phone | Confirm both joined IoT-Gateway, the URL includes .10:8000, and the PC firewall permits TCP 8000 from 192.168.78.0/24. Do not disable the firewall. |
-| Website opens but the device stays unavailable | Confirm Board C is flashed/configured for IoT-Gateway with the AP password, .10:8000 and matching device ID. Keep the real device service running. Inspect Board C's Wi-Fi/poll logs and the PC firewall. The LED can correctly be off while connected. |
+| Website opens on the PC but not on the phone | Expected: the UI/API admits only the PC itself. Other clients receive 403 if they can reach the listener. |
+| Website opens but the device stays unavailable | Confirm Board C is flashed/configured for IoT-Gateway with the AP password, .10:8443, provisioned TLS identities and matching device ID. Keep the real device service running. Inspect Board C's Wi-Fi/poll logs and the PC firewall. The LED can correctly be off while connected. |
 | A command has an unknown result | Wait for a fresh device status report before retrying, then compare the reported state with the physical LED. Check service/device logs if confirmation continues to fail. |
 
 Local website and LED control use the station AP and can work without
@@ -117,7 +124,8 @@ upstream internet; the phone's internet test checks a separate routing path.
 No port forwarding or public exposure is needed for this local demo. A
 dedicated server can host the separate service later, but Board C's configured
 service IPv4 address/port and outbound network reachability must match that
-deployment. The current device channel is lab-only plain HTTP; see the
+deployment. The device channel requires mutual TLS; the UI/API is PC-only. See
+the [isolation setup and limits](docs/device-isolation.md) and the
 [device API and its limitations](docs/device-api.md).
 
 ## Current status
@@ -131,13 +139,14 @@ deployment. The current device channel is lab-only plain HTTP; see the
   client NAT onto SPI. Per-device network policy remains future work; the
   website/API runs as the separate service described above.
 - Board C is an ESP32-C6 Wi-Fi LED device that contacts a PC at
-  **192.168.78.10:8000**. The PC serves the existing website and confirms LED
+  **192.168.78.10:8443** with mutual TLS. The PC serves the website on port 8000 and confirms LED
   commands against device acknowledgements. See [third-board setup](firmware/target-device/README.md).
   S3 physical LED/heartbeat/restart results are recorded in
-  [bench evidence](docs/s3-test-evidence.md); C6 fixed-IP Windows acceptance is pending.
+  [bench evidence](docs/s3-test-evidence.md); the C6/Linux fixed-IP bench passed control; Windows acceptance is pending.
 - ESP32-C6 UART hardware checks verified AP/DHCP, phone internet access and
-  peer-restart recovery; see [UART results](docs/uart-link.md). SPI hardware,
-  simultaneous clients and extended soak checks remain on the
+  peer-restart recovery; see [UART results](docs/uart-link.md). The 4 MHz SPI
+  bench passed DNS/HTTP with zero malformed frames. Simultaneous clients,
+  restart recovery on SPI and extended soak checks remain on the
   [acceptance checklist](docs/testing.md).
 - Four Wi-Fi clients are supported by default, with .10 excluded from DHCP
   for a fixed UI PC. See [Windows setup and outbound-only routing](docs/client-network.md).

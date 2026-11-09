@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 python3 tools/test/test_device_server.py
+python3 tools/test/test_device_isolation.py
 node --test tools/test/test_web_api.mjs
 
 # The macOS AddressSanitizer runtime hangs before main on the development

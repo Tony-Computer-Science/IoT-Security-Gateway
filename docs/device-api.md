@@ -1,7 +1,7 @@
 # Board C to PC device API
 
-**Version 0.1.0.** One ESP32-C6 or ESP32-S3 target joins IoT-Gateway and initiates
-HTTP requests to **192.168.78.10:8000**. The website and authenticated browser
+**Version 0.2.0.** One ESP32-C6 or ESP32-S3 target joins IoT-Gateway and initiates
+mutually authenticated HTTPS requests to **192.168.78.10:8443**. The website and authenticated browser
 API are a separate service external to the boards. For simplicity, the demo
 runs this service on a local computer instead of a dedicated server. The PC
 serves both from the same origin. It never opens a
@@ -10,16 +10,38 @@ See [Setting Up](../README.md#setting-up) for startup order and LED checks.
 
 The demo PC acts as the server at a manually assigned fixed address. Board C
 has this address and port compiled into its firmware from `TARGET_UI_HOST`
-and `TARGET_UI_PORT` in menuconfig (defaults **192.168.78.10** / **8000**).
+and `TARGET_UI_PORT` in menuconfig (defaults **192.168.78.10** / **8443**).
 There is no automatic server discovery. Moving the service to a dedicated
 server with a different endpoint requires rebuilding and flashing Board C
 with matching settings. The website and APIs remain on the server, never
 on an ESP32.
 
-Board C remains an intentionally vulnerable **lab-only plain-HTTP device**:
-this channel has no device authentication or TLS. Its public device ID is
-not a credential. AP peers can impersonate it; the browser's operator login
-does not fix that evaluation-target limitation.
+The PC and target require provisioned certificates. The PC checks both the
+private CA and the exact target certificate fingerprint; the target verifies
+the PC certificate against that CA and its configured server IP. Plaintext
+polls on the browser port receive 403 `device_tls_required`. The TLS listener
+does not expose browser login/control/events routes. Device IDs remain labels,
+not credentials. No unauthenticated fallback exists.
+
+Provision once on the PC with `python3 tools/provision_device_tls.py`, then
+build the target using that private identity directory. Its CA certificate,
+client certificate and client key are embedded; keep firmware and generated
+files private. The CA signing key and PC key stay on the PC. Certificate
+rotation requires provisioning a new directory and rebuilding the target.
+
+Target certificate date checks are enabled. Before its first connection, the
+target bootstraps its clock from firmware build time; after authenticated TLS
+it refines that clock using the PC's `X-Device-Time` response header. The first
+connection relies on the build-time clock estimate, not an independent RTC.
+Certificate chain and server-name checks are always required. Rebuild after
+identity rotation or long storage.
+
+The target's lwIP input hook drops IPv4 packets from addresses other than the
+configured PC. Unfragmented DHCP replies (UDP 67 → 68) and local ICMP echo
+(type 8/0, code 0) from unicast sources on the AP /24 are allowed exceptions;
+lwIP still validates those packets. IPv6 is disabled. ARP and Wi-Fi management traffic
+remain necessary, so this is not AP-wide layer-2 client isolation. A spoofed
+PC IP cannot complete the authenticated device channel without the PC key.
 
 ## `POST /device/poll`
 
@@ -127,6 +149,10 @@ LED or the Windows PC. Deploying the third board needs the matching ESP-IDF
 
 ## Changelog
 
+- 0.2.0: Mutual TLS on the dedicated device listener, exact target certificate
+  pinning at the PC, authenticated PC time, PC-only IPv4 filtering and rejection
+  of plaintext device polls. DHCP and local unfragmented ping are explicit
+  packet-filter exceptions. JSON command/report fields are unchanged.
 - 0.1.0: Initial outbound poll, bounded command confirmation, restart and
   acknowledgement behavior for the real Board C lab target.
 - Documentation clarified on 2026-11-08: deduplication retains only the most

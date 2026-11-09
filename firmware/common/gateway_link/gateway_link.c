@@ -53,6 +53,7 @@ typedef struct
     uint32_t generation;
     uint32_t received;
     uint32_t rejected;
+    uint32_t malformed;
     uint32_t dropped;
     uint32_t tx_ip, tx_arp, rx_ip, rx_arp;
     uint32_t tx_sequence;
@@ -322,6 +323,7 @@ static bool process_rx_frame(size_t length, uint32_t sent_generation, uint64_t s
     {
         portENTER_CRITICAL(&state_lock);
         ++s_link.rejected;
+        ++s_link.malformed;
         portEXIT_CRITICAL(&state_lock);
         return false;
     }
@@ -486,6 +488,25 @@ static void IRAM_ATTR on_spi_complete(spi_slave_transaction_t *t)
     gpio_set_level(HS_GPIO, 0);
 }
 #endif
+#ifdef CONFIG_GW_LINK_DIAGNOSTICS
+static void spi_diagnostics(uint64_t *next, uint32_t completed, uint32_t bits)
+{
+    if (now_ms() < *next)
+    {
+        return;
+    }
+    portENTER_CRITICAL(&state_lock);
+    uint32_t rejected = s_link.rejected, dropped = s_link.dropped;
+    uint32_t malformed = s_link.malformed, accepted = s_link.received;
+    portEXIT_CRITICAL(&state_lock);
+    ESP_LOGI(TAG, "SPI transfers=%lu bits=%lu HS=%d accepted=%lu malformed=%lu rejected=%lu "
+                 "dropped=%lu forwarding=%s",
+             (unsigned long)completed, (unsigned long)bits, gpio_get_level(HS_GPIO),
+             (unsigned long)accepted, (unsigned long)malformed, (unsigned long)rejected,
+             (unsigned long)dropped, gateway_link_data_enabled() ? "open" : "closed");
+    *next = now_ms() + 5000;
+}
+#endif
 /* Only this task touches the SPI driver and DMA descriptors. */
 static void spi_transport_task(void *arg)
 {
@@ -509,7 +530,7 @@ static void spi_transport_task(void *arg)
     spi_device_handle_t device;
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &config, &device));
 #else
-    hs.mode = GPIO_MODE_OUTPUT;
+    hs.mode = GPIO_MODE_INPUT_OUTPUT;
     ESP_ERROR_CHECK(gpio_config(&hs));
     gpio_set_level(HS_GPIO, 0);
     ESP_ERROR_CHECK(gpio_set_pull_mode(CONFIG_GW_SPI_CS_GPIO, GPIO_PULLUP_ONLY));
@@ -521,11 +542,19 @@ static void spi_transport_task(void *arg)
     ESP_ERROR_CHECK(spi_slave_initialize(SPI2_HOST, &bus, &config, SPI_DMA_CH_AUTO));
 #endif
     ESP_LOGI(TAG, "SPI ready: SCLK=%d MOSI=%d MISO=%d CS=%d HS=%d; protocol 0.2.0",
-             CONFIG_GW_SPI_SCLK_GPIO, CONFIG_GW_SPI_MOSI_GPIO, CONFIG_GW_SPI_MISO_GPIO,
+             bus.sclk_io_num, bus.mosi_io_num, CONFIG_GW_SPI_MISO_GPIO,
              CONFIG_GW_SPI_CS_GPIO, HS_GPIO);
+#ifdef CONFIG_GW_LINK_DIAGNOSTICS
+    uint64_t next_diagnostic = 0;
+    uint32_t completed = 0;
+    uint32_t last_bits = 0;
+#endif
     for (;;)
     {
         service_session_timeout();
+#ifdef CONFIG_GW_LINK_DIAGNOSTICS
+        spi_diagnostics(&next_diagnostic, completed, last_bits);
+#endif
 #ifdef CONFIG_GW_SPI_CONTROLLER
         if (!gpio_get_level(HS_GPIO))
         {
@@ -541,6 +570,10 @@ static void spi_transport_task(void *arg)
         spi_transaction_t transaction = {
             .length = GW_FRAME_SIZE * 8, .tx_buffer = s_link.tx_dma, .rx_buffer = s_link.rx_dma};
         esp_err_t err = spi_device_transmit(device, &transaction);
+#ifdef CONFIG_GW_LINK_DIAGNOSTICS
+        ++completed;
+        last_bits = err == ESP_OK ? transaction.length : 0;
+#endif
         if (err == ESP_OK)
         {
             more = process_rx_frame(GW_FRAME_SIZE, generation, local, peer);
@@ -564,8 +597,15 @@ static void spi_transport_task(void *arg)
                ESP_ERR_TIMEOUT)
         {
             service_session_timeout();
+#ifdef CONFIG_GW_LINK_DIAGNOSTICS
+            spi_diagnostics(&next_diagnostic, completed, last_bits);
+#endif
         }
         ESP_ERROR_CHECK(result);
+#ifdef CONFIG_GW_LINK_DIAGNOSTICS
+        ++completed;
+        last_bits = transaction.trans_len;
+#endif
         more = process_rx_frame(transaction.trans_len == GW_FRAME_SIZE * 8 ? GW_FRAME_SIZE : 0,
                                 generation, local, peer);
         (void)more;

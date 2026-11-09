@@ -62,7 +62,9 @@ Match the address, port and device ID in Board C's menuconfig. When
 password; sign in with the value you configured.
 
 Build and flash [Board C](../firmware/target-device/README.md) with the station
-AP credentials and the same PC address/port. Its Wi-Fi requests carry state
+AP credentials and PC address, using device TLS port 8443. Provision identities
+first with `python3 tools/provision_device_tls.py`; OpenSSL is needed once,
+with no added Python runtime packages. Its Wi-Fi requests carry state
 reports and receive `led_on` / `led_off` commands. The PC returns browser
 success only after a matching device acknowledgement. Unconfirmed delivered
 commands return 504; acknowledged driver failures return 502 `command_failed`
@@ -73,8 +75,8 @@ The service reserves worker capacity for device polls; excess browser/API
 requests return 503 `server_busy` with a retry hint.
 
 One IoT target is supported. The PC service disables all `/__mock/` routes.
-Its device channel is intentionally unauthenticated plain HTTP on the lab
-AP; it does not implement TLS or device identity verification. See the
+Its device channel requires mutual TLS and the provisioned target certificate.
+The UI/API accepts only the hosting PC. See [PC-only isolation](../docs/device-isolation.md), the
 [device wire contract](../docs/device-api.md) and [automated checks](../tools/test/README.md).
 
 ## Build

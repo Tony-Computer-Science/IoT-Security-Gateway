@@ -16,10 +16,11 @@ The separate spi-test-host image stands in for A with its Wi-Fi radio disabled.
 The website/API is a separate service external to the ESP32 boards. For
 simplicity, the demo hosts it on a local computer instead of a dedicated
 server. Board C joins A's AP as a Wi-Fi client and polls that computer at
-192.168.78.10:8000. The service serves the browser API and confirms LED
+192.168.78.10:8443 using mutual TLS. The service serves the browser API on
+port 8000 and confirms LED
 commands using device acknowledgements. This application traffic stays on
 the AP; it does not pass through the A/B transport or require outside access.
-The intentionally unauthenticated device channel is documented in
+The mutually authenticated device channel and PC-only IPv4 filter are documented in
 [device-api.md](device-api.md). Browser login authenticates operators to the
 PC service; it does not authenticate C or implement per-client network policy.
 The service PC is inside the protected AP in this demo; "external service"
@@ -33,14 +34,14 @@ The UI and browser/device APIs belong to a server process. A local PC acts
 as that server in the demo because no dedicated server is provisioned:
 
 ```text
-Browser on PC/phone -> http://192.168.78.10:8000/ -> PC web service
-Board C            -> http://192.168.78.10:8000/device/poll -> same service
+Browser on PC -> http://192.168.78.10:8000/ -> PC-only UI/API
+Board C       -> https://192.168.78.10:8443/device/poll -> mutual-TLS listener
 ```
 
 The PC is manually assigned **192.168.78.10/24** on A's AP; A excludes .10
 from its DHCP pool but does not assign it to the PC automatically. Board C's
 `TARGET_UI_HOST` and `TARGET_UI_PORT` settings default to **192.168.78.10**
-and **8000** and are compiled into its firmware. This is a fixed configured
+and device TLS port **8443** and are compiled into its firmware. This is a fixed configured
 endpoint, not service discovery. A future dedicated server must be reachable
 at the device's configured address/port; changing that endpoint requires
 rebuilding and flashing Board C. The browser uses relative `/api/` URLs
@@ -102,8 +103,9 @@ outbound IPv4 TCP, UDP and ICMP are supported. HTTPS remains end-to-end.
   TCP/UDP mappings for source ports >=1024, as used by ordinary client sockets.
 - SPI is trusted by physical control. CRC detects corruption, not malicious
   peers. A enforces WPA2/AES admission and basic IPv4 source/subnet policy;
-  application authorization and per-device policy remain future work. This
-  does not implement Wi-Fi client isolation.
+  general per-device router policy remains future work. The separate target
+  input filter and mutual TLS protect Board C application traffic; local ping
+  remains allowed. This does not implement Wi-Fi client isolation.
 
 ## Original graded requirements
 
@@ -112,22 +114,23 @@ not rewritten to make the new router appear compliant.
 
 | Original requirement | Router milestone consequence |
 |---|---|
-| R1 controlled target entry | Topology and traffic direction changed; target-command isolation is not implemented here. |
-| R2 credential before commands | Uplink/AP credentials are protected from source/log disclosure and A requires WPA2 admission; application command authentication is not part of this router. |
+| R1 controlled target entry | Topology and traffic direction changed. Board C permits authenticated PC control; router traffic is still ordinary IPv4 forwarding. |
+| R2 credential before commands | Uplink/AP credentials are protected from source/log disclosure and A requires WPA2 admission; the PC/target application now requires mutual TLS and browser login, separately from router policy. |
 | R3 status/output allow-list, fixed destination | Intentionally incompatible: clients choose ordinary IPv4 destinations. |
 | R4 configurable request limits | Packet queues are bounded; the PC service reuses browser login/command limits and allows one pending target command. These are separate from router policy. |
 | R5 bounded authorized event log | The PC service exposes an authenticated bounded application log through the implemented events view. Router link counters and serial diagnostics are separate. |
-| R6 normal target output control | C6/S3 LED control and PC command confirmation are implemented. S3 bench acceptance is recorded separately; C6 fixed-IP PC integration remains pending. |
+| R6 normal target output control | C6/S3 LED control and PC command confirmation are implemented. S3/C6 bench control is recorded separately; Windows fixed-IP acceptance remains pending. |
 | R7 restart handling | Session invalidation and closed data paths are implemented; C6 UART peer-restart checks passed. SPI/full hardware acceptance remains pending. Local Board C control does not require the A/B link. |
 
 The [SPI 0.2.0 contract](spi-protocol.md) supersedes the draft command protocol.
-The [REST API 0.3.2](api-contract.md) is served by the PC, not A or B, and
+The [REST API 0.4.0](api-contract.md) is served by the PC, not A or B, and
 documents unknown command results when a delivered command lacks confirmation.
 PCB signal routing remains valid, but its A-uplink/B-IoT-AP labels reflect the
 old architecture and must be revised before fabrication.
 
 A fixed UI host address (.10 in the default AP /24) is excluded from the DHCP
 pool. Station supports four simultaneous clients by default; associated
-clients can communicate locally with the UI PC. Both pre-NAT filters reject
+clients can address the UI PC locally, but its UI/API admits only the PC
+itself and its device listener requires the provisioned target certificate. Both pre-NAT filters reject
 new TCP SYN packets arriving from outside while allowing normal replies.
 See [client addressing and outbound-only routing](client-network.md).

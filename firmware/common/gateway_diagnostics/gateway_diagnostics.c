@@ -38,7 +38,7 @@ static void probe(void *argument)
     struct addrinfo hints = {.ai_family = AF_INET, .ai_socktype = SOCK_STREAM}, *result = NULL;
     int resolved = getaddrinfo("example.com", NULL, &hints, &result);
     ESP_LOGI("link_probe", "%s DNS lookup: %s (code=%d)",
-             station ? "Station over UART" : "Bridge upstream", resolved == 0 ? "PASS" : "FAIL",
+             station ? "Station over board link" : "Bridge upstream", resolved == 0 ? "PASS" : "FAIL",
              resolved);
     if (result)
     {
@@ -54,7 +54,7 @@ static void probe(void *argument)
         esp_err_t error = esp_http_client_perform(client);
         int status = esp_http_client_get_status_code(client);
         ESP_LOGI("link_probe", "%s HTTP: %s status=%d error=%s",
-                 station ? "Station over UART" : "Bridge upstream",
+                 station ? "Station over board link" : "Bridge upstream",
                  error == ESP_OK && status >= 200 && status < 400 ? "PASS" : "FAIL", status,
                  esp_err_to_name(error));
         esp_http_client_cleanup(client);

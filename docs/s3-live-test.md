@@ -9,8 +9,9 @@ result established browser/service/target integration, not A/B isolation.
 The current gateway demo uses the PC as the server at the fixed address
 **192.168.78.10:8000** on IoT-Gateway. No ESP32 serves the UI/API. Configure
 that PC using [client-network.md](client-network.md), then follow the root
-[Setting Up guide](../README.md#setting-up). The target's server address/port
-are compiled in through menuconfig; there is no automatic service discovery.
+[Setting Up guide](../README.md#setting-up). The target's server address and device TLS port **8443** are compiled in
+through menuconfig; there is no automatic service discovery. Provision private
+identities using [device-isolation.md](device-isolation.md) before building.
 
 ## Requirements
 
@@ -21,13 +22,16 @@ are compiled in through menuconfig; there is no automatic service discovery.
   onto an S3, or guess a pin from another carrier.
 - A private 2.4 GHz WPA2/WPA3-compatible network under your control. The target
   and API service must be mutually reachable. Campus Wi-Fi/client isolation
-  is unsuitable. The device channel is unauthenticated HTTP by design.
+  is unsuitable. The device channel requires mutual TLS; the UI is PC-only.
+- OpenSSL on PATH for one-time identity provisioning and the TLS tests.
 
 ## Start the service
 
-From the repository root:
+From the repository root, provision identities once before building the target,
+then start the service after assigning the PC its fixed address:
 
 ```sh
+python3 tools/provision_device_tls.py
 python3 web/device_server.py --host 192.168.78.10 --port 8000 --device-id iot-s3
 ```
 
@@ -37,18 +41,10 @@ generated password printed by the process. `UI_PASSWORD` can supply a private
 local password. Only bind to the intended test interface. The mock server is
 still available for offline development, but does not control an ESP.
 
-For the historical remote-development bench arrangement only, bind the service to `127.0.0.1:8765`
-and forward it from the computer connected to the ESP's Wi-Fi:
-
-```sh
-ssh -N -o ExitOnForwardFailure=yes \
-  -L 127.0.0.1:8765:127.0.0.1:8765 \
-  -L <LOCAL_WIFI_IP>:8000:127.0.0.1:8765 <DEVELOPMENT_HOST>
-```
-
-The browser uses `http://127.0.0.1:8765/`; the ESP uses `<LOCAL_WIFI_IP>:8000`.
-The SSH tunnel must stay running. Confirm local firewall access to the bound
-Wi-Fi address. This forwarding carries the application test traffic only.
+The historical plain-HTTP SSH forwarding arrangement is no longer supported
+by the deployed device channel. The PC hosts HTTPS on port 8443 with its
+private server identity and admits only the provisioned target certificate.
+Allow that listener through the PC firewall; the browser UI stays on port 8000.
 
 ## Build and flash
 
@@ -63,15 +59,15 @@ idf.py -p <USB_PORT> flash monitor
 ```
 
 Under **Board C IoT device**, set the private Wi-Fi SSID/password, service IPv4
-address/port, `iot-s3` device ID, and verified WS2812 LED pin. S3-specific defaults
+address/device TLS port 8443, `iot-s3` device ID, and verified WS2812 LED pin. S3-specific defaults
 select 16 MB flash and USB Serial/JTAG console. PSRAM is not required. For the
 existing C6 board use `set-target esp32c6` and its verified GPIO8 carrier.
 
-Back up existing firmware before the first flash. Keep sdkconfig, flash backups,
+Keep sdkconfig, private identities, flash backups,
 and credential-bearing binaries private and outside version control. When USB
 and compilation are on different computers, transfer the build's bootloader,
 partition table, app and flashing arguments privately; use the offsets generated
-for that exact target. The original board image is the rollback artifact.
+for that exact target. The repository source is the rebuild artifact; keep any optional rollback images private.
 
 ## Verified bench configuration
 
@@ -115,7 +111,9 @@ firmware parser tests with sanitizers (UBSan only on macOS) and the web build.
 The parser step uses managed cJSON when an ESP-IDF build installed it, and
 otherwise downloads the same pinned archive and checks its SHA-256.
 
-The Python tests use a software device actor over real HTTP. The JavaScript
+The Python tests use software device actors over loopback HTTP and real mutual
+TLS, including certificate and non-PC admission failures. The sanitized target
+checks also cover the IPv4 input policy. OpenSSL is required for test identities. The JavaScript
 tests stub `fetch` and cover `web/src/api.js`; `app.js` screen behavior still
 has manual browser evidence only. Keep that test
 result separate from physical LED/radio acceptance. The PR workflow is gated by repository variable `ENABLE_HOSTED_TESTS=true`.
