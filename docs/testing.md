@@ -67,6 +67,45 @@ S3 or C6 (configure the verified carrier LED pin for S3). Choose the matching `i
 `idf.py set-target esp32c6` on initial configuration. Set-target resets
 sdkconfig, so configure credentials afterward. See the [firmware index](../firmware/README.md).
 
+## Recorded C6 home-network portal bench — 2026-11-09
+
+One C6 previously running the red bridge role was temporarily flashed with
+`target-device`. The Linux laptop hosted the existing PC service on its
+home-network IPv4 address, held static for the active Wi-Fi session. The saved
+laptop Wi-Fi profile remains DHCP; reconnecting or rebooting restores that
+profile. This bench bypasses A/B and does not change the gateway demo's
+`192.168.78.10:8000` endpoint.
+
+On the separate home IoT network, the C6 associated and obtained DHCP. The
+laptop received four of four ping replies, but device-initiated HTTP polls
+to the laptop timed out. This demonstrates an unusable application path in
+that arrangement, not proof of which router or firewall rule caused it.
+
+On the home main network, WPA3 authentication initially failed repeatedly.
+Explicitly selecting both SAE password-element methods, as the bridge already
+does, allowed association, DHCP and real device polling. Wi-Fi disconnects now
+log their reason code without logging credentials.
+
+Software validation passed separately: `bash ci/run.sh` (22 service tests,
+eight browser-client tests, sanitized target parser and web asset checks),
+and ESP-IDF 6.1 target builds for C6 and S3. The S3 build used nonempty dummy
+Wi-Fi settings and GPIO48 for compilation only; no S3 was flashed in this run.
+
+| Physical C6 / browser check | Observation |
+|---|---|
+| Login and heartbeat | Browser sign-in succeeded; target became reachable and controls enabled |
+| Output commands | Browser ON/OFF commands received matching device confirmations and status updates |
+| Green output | Operator visually confirmed the controllable RGB LED was green after ON; optical OFF was not separately confirmed |
+| Missing heartbeats | Pausing the C6 for more than eight seconds marked the target unavailable and disabled controls |
+| Device restart | Restarted C6 rejoined Wi-Fi and restored fresh reports without reflashing |
+| Service restart | Old sessions returned 401, browser required login again, and the C6 resumed polling |
+| Events | Browser showed authentication, availability and confirmed-command entries; Allowed filtering worked |
+
+The final bench state is a reachable C6 with green output and a running PC
+service. Private credentials, generated firmware and detailed local logs are
+not committed. A/B forwarding, gateway isolation, the final Windows setup and
+the third-board configuration remain separate acceptance work.
+
 ## Merge integration checks — 2026-11-08
 
 The PR #6 integration preserves main's events/theme/live-monitoring behavior

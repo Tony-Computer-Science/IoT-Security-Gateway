@@ -43,7 +43,15 @@ static void network_event(void *arg, esp_event_base_t base, int32_t id, void *da
              (base == IP_EVENT && id == IP_EVENT_STA_LOST_IP))
     {
         xEventGroupClearBits(network_events, IPV4_READY);
-        ESP_LOGW(TAG, "Wi-Fi/IP unavailable; commands paused");
+        if (base == WIFI_EVENT)
+        {
+            const wifi_event_sta_disconnected_t *event = data;
+            ESP_LOGW(TAG, "Wi-Fi unavailable, reason=%u; commands paused", event->reason);
+        }
+        else
+        {
+            ESP_LOGW(TAG, "IPv4 unavailable; commands paused");
+        }
     }
 }
 
@@ -207,6 +215,7 @@ void app_main(void)
     memcpy(wifi.sta.ssid, CONFIG_TARGET_WIFI_SSID, strlen(CONFIG_TARGET_WIFI_SSID));
     memcpy(wifi.sta.password, CONFIG_TARGET_WIFI_PASSWORD, strlen(CONFIG_TARGET_WIFI_PASSWORD));
     wifi.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    wifi.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi));
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
