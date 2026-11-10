@@ -78,6 +78,12 @@ def main():
             str(ROOT / "tools/test/test_target_protocol.c"), "-lm", "-o", str(executable)
         ], check=True)
         subprocess.run([str(executable)], check=True, timeout=30)
+        network_test = Path(directory) / "target-network-tests"
+        subprocess.run([os.environ.get("CC", "cc"), *flags, "-I", str(MAIN),
+                        str(MAIN / "target_network_policy.c"),
+                        str(ROOT / "tools/test/test_target_network.c"),
+                        "-o", str(network_test)], check=True)
+        subprocess.run([str(network_test)], check=True, timeout=30)
 
 
 if __name__ == "__main__":

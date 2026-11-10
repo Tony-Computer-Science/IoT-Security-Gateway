@@ -1,11 +1,16 @@
-/* Board C: unauthenticated plain-HTTP lab device. All UI connections are
+/* Board C: mutually authenticated TLS to its provisioned PC. All connections are
  * initiated toward the PC; there is no listening socket on this board. */
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <sys/time.h>
+#include <time.h>
 #include "sdkconfig.h"
 #include "target_led.h"
 #include "target_protocol.h"
+#include "target_network_hooks.h"
 #include "esp_event.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -22,6 +27,9 @@
 #define IPV4_READY BIT0
 static const char *TAG = "iot_device";
 static EventGroupHandle_t network_events;
+extern const char target_ca[] asm("_binary_target_ca_start");
+extern const char target_cert[] asm("_binary_target_cert_start");
+extern const char target_key[] asm("_binary_target_key_start");
 
 typedef struct
 {
@@ -43,14 +51,36 @@ static void network_event(void *arg, esp_event_base_t base, int32_t id, void *da
              (base == IP_EVENT && id == IP_EVENT_STA_LOST_IP))
     {
         xEventGroupClearBits(network_events, IPV4_READY);
-        ESP_LOGW(TAG, "Wi-Fi/IP unavailable; commands paused");
+        if (base == WIFI_EVENT)
+        {
+            const wifi_event_sta_disconnected_t *event = data;
+            ESP_LOGW(TAG, "Wi-Fi unavailable, reason=%u; commands paused", event->reason);
+        }
+        else
+        {
+            ESP_LOGW(TAG, "IPv4 unavailable; commands paused");
+        }
     }
 }
 
 static esp_err_t http_event(esp_http_client_event_t *event)
 {
     response_t *response = event->user_data;
-    if (event->event_id == HTTP_EVENT_ON_DATA)
+    if (event->event_id == HTTP_EVENT_ON_HEADER &&
+        !strcasecmp(event->header_key, "X-Device-Time") && strlen(event->header_value) <= 10)
+    {
+        /* Headers arrive only after the provisioned PC's TLS identity verified.
+         * Bootstrap uses firmware build time; authenticated PC time refines it. */
+        char *end;
+        unsigned long long seconds = strtoull(event->header_value, &end, 10);
+        if (end != event->header_value && !*end && seconds >= TARGET_BUILD_EPOCH &&
+            seconds <= UINT32_MAX)
+        {
+            struct timeval now = {.tv_sec = (time_t)seconds};
+            settimeofday(&now, NULL);
+        }
+    }
+    else if (event->event_id == HTTP_EVENT_ON_DATA)
     {
         if (event->data_len < 0 || (size_t)event->data_len > TARGET_RESPONSE_MAX - response->length)
         {
@@ -72,14 +102,17 @@ static void device_task(void *unused)
     bool on = false, ack_ok = true;
     unsigned reconnect_ms = 1000, failures = 0;
     char url[96];
-    snprintf(url, sizeof(url), "http://%s:%d/device/poll", CONFIG_TARGET_UI_HOST,
+    snprintf(url, sizeof(url), "https://%s:%d/device/poll", CONFIG_TARGET_UI_HOST,
              CONFIG_TARGET_UI_PORT);
     response_t response = {0};
     esp_http_client_config_t config = {.url = url,
                                        .method = HTTP_METHOD_POST,
                                        .event_handler = http_event,
                                        .user_data = &response,
-                                       .timeout_ms = 3000,
+                                       .timeout_ms = 5000,
+                                       .cert_pem = target_ca,
+                                       .client_cert_pem = target_cert,
+                                       .client_key_pem = target_key,
                                        .disable_auto_redirect = true,
                                        .buffer_size = 512,
                                        .buffer_size_tx = 512};
@@ -174,6 +207,12 @@ static void device_task(void *unused)
 
 void app_main(void)
 {
+    ESP_ERROR_CHECK(target_network_init() ? ESP_OK : ESP_ERR_INVALID_ARG);
+    if (time(NULL) < (time_t)TARGET_BUILD_EPOCH)
+    {
+        struct timeval build_time = {.tv_sec = (time_t)TARGET_BUILD_EPOCH};
+        ESP_ERROR_CHECK(settimeofday(&build_time, NULL) == 0 ? ESP_OK : ESP_FAIL);
+    }
     ESP_ERROR_CHECK(target_led_init());
     esp_ip4_addr_t ui_ip;
     if (!strlen(CONFIG_TARGET_WIFI_SSID) || strlen(CONFIG_TARGET_WIFI_SSID) > 32 ||
@@ -207,6 +246,7 @@ void app_main(void)
     memcpy(wifi.sta.ssid, CONFIG_TARGET_WIFI_SSID, strlen(CONFIG_TARGET_WIFI_SSID));
     memcpy(wifi.sta.password, CONFIG_TARGET_WIFI_PASSWORD, strlen(CONFIG_TARGET_WIFI_PASSWORD));
     wifi.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    wifi.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi));
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));

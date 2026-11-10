@@ -6,13 +6,13 @@ private Wi-Fi and routes through it. Board A's forwarding policy
 observable facts:
 
 * Board A answers ICMP echo on its AP address whenever its AP is up, even
-  while the UART link is down. A ping therefore checks Board A.
+  while the SPI/UART link is down. A ping therefore checks Board A.
 * Client traffic to addresses outside the AP and link subnets is forwarded
   only while the A-B link is ready, and only reaches the outside if Board B's
   upstream Wi-Fi and NAT work. A TCP connection to an outside address
-  therefore checks the whole path A -> UART -> B -> upstream at once.
+  therefore checks the whole path A -> SPI/UART -> B -> upstream at once.
 
-The path check cannot tell a UART fault from a Board B upstream fault. It is
+The path check cannot tell a board-link fault from a Board B upstream fault. It is
 also only meaningful while the PC's route to that address goes through
 Board A; the README tells the operator to keep the PC on that one network.
 """
@@ -164,7 +164,7 @@ class GatewayMonitor:
             self.checks["gateway_path"] = Check(
                 "gateway_path", path_probe, path_interval_s, outside, window,
                 up_detail="traffic passing through the gateway",
-                down_detail="no traffic through the gateway: UART link or Board B upstream down")
+                down_detail="no traffic through the gateway: SPI/UART link or Board B upstream down")
         self.stop_event = threading.Event()
         self.thread = None
 

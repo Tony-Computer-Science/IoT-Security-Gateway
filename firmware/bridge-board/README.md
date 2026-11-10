@@ -2,8 +2,9 @@
 
 ESP32-S3 or ESP32-C6, ESP-IDF **6.1**, at least 4 MB flash, no PSRAM requirement.
 B joins
-existing 2.4 GHz WPA2/WPA3 personal Wi-Fi and NATs IPv4 packets from Board A's
-SPI address. It creates no access point and serves no HTTP management API.
+existing 2.4 GHz WPA2/WPA3 personal or Enhanced Open (OWE) Wi-Fi and NATs IPv4
+packets from Board A's SPI address. It creates no access point and serves no
+HTTP management API.
 
 On C6-WROOM-1 DevKitC-1 boards, the onboard GPIO8 RGB LED shows **red**
 to identify this firmware role. This is a fixed identity color, not a network
@@ -39,12 +40,19 @@ Use the actual serial port for B. The example selects C6; use
 defaults to S3. Only run `set-target` on initial setup or target changes:
 it resets configuration, including Wi-Fi settings. Preserve private settings
 beforehand and restore them in menuconfig. In **Component config → Bridge
-upstream Wi-Fi**, enter your SSID (1–32 bytes) and passphrase (8–63 bytes).
-Empty defaults deliberately build but leave forwarding disabled with a
+upstream Wi-Fi**, enter your SSID (1–32 bytes). The default personal mode
+requires an 8–63 byte passphrase. For the passwordless school network using
+OWE, enable **Use Enhanced Open / OWE**, set the actual SSID privately and
+leave the passphrase empty. Association and internet access still require
+an on-campus hardware test. OWE mode requires
+protected management frames and rejects unencrypted Open and personal-mode
+associations. Disable it and supply a passphrase to return to WPA2/WPA3 personal.
+
+Empty SSID defaults deliberately build but leave forwarding disabled with a
 configuration-error status. No credentials are requested in chat or committed.
-Open/WEP/enterprise/captive-portal networks are unsupported. Configuration
-is compiled into firmware; generated binaries, sdkconfig and sdkconfig.old
-must remain private. Wi-Fi runtime storage is RAM, not NVS.
+Unencrypted Open, WEP, enterprise and captive-portal login are unsupported.
+Configuration is compiled into firmware; generated binaries, sdkconfig and
+sdkconfig.old must remain private. Wi-Fi runtime storage is RAM, not NVS.
 
 **Gateway board link** settings must match the test/production host. Default
 B=192.168.77.1, A=192.168.77.2, /30. Change both if the upstream LAN overlaps.

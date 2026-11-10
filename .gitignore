@@ -69,3 +69,4 @@ credentials.*
 *_credentials.*
 secrets.*
 *.secret
+/local-backups/

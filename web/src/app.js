@@ -344,7 +344,7 @@ function formatSeconds(s) {
 // or automatically retry from an ambiguous response.
 
 const LINK_DOWN_TEXT =
-  'Board-to-board link is down: the station board and the bridge board cannot talk over the UART wire. Commands are disabled.';
+  'Board-to-board link is down: the station board and the bridge board cannot talk over the SPI/UART wire. Commands are disabled.';
 const TARGET_UNREACHABLE_TEXT =
   'Target device unreachable: the station board cannot reach the IoT device on its private Wi-Fi. Commands are disabled.';
 const GATEWAY_UNREACHABLE_TEXT =
@@ -403,7 +403,7 @@ function renderStatus(status) {
   document.getElementById('link-label').textContent = liveDeviceMode ? 'Device channel' : 'Board-to-board link';
   document.getElementById('link-medium').textContent = liveDeviceMode
     ? 'HTTP heartbeat between the API service and target'
-    : 'UART wire, bridge board B to station board A';
+    : 'SPI/UART wire, bridge board B to station board A';
   document.getElementById('target-medium').textContent = liveDeviceMode
     ? (status.last_seen_s === null ? 'Waiting for first device report' : `Last report: ${status.last_seen_s}s ago`)
     : 'Private Wi-Fi "IoT-Gateway", station board A to IoT device C';
@@ -412,7 +412,7 @@ function renderStatus(status) {
   const monitoring = status.monitoring && typeof status.monitoring === 'object' ? status.monitoring : null;
   shown.monitoring = liveDeviceMode ? monitoring : null;
   note.textContent = monitoring && monitoring.enabled === true
-    ? 'Live device test: the gateway is checked from this computer (Board A by ping, the path through the UART link and Board B by an outside connection). Network isolation is not measured. LED state is the last device report.'
+    ? 'Live device test: the gateway is checked from this computer (Board A by ping, the path through the SPI/UART link and Board B by an outside connection). Network isolation is not measured. LED state is the last device report.'
     : 'Live device test: gateway A/B link and network isolation are not measured. LED state is the last device report.';
   document.querySelector('.path').dataset.live = String(liveDeviceMode);
   document.querySelector('.path').setAttribute('aria-label', liveDeviceMode ? 'Device test status' : 'Signal path from the gateway to the device');
@@ -553,7 +553,7 @@ function handleCommandError(err) {
       shown.link_ok = false;
       setStateMessage('control-state', 'link-down', liveDeviceMode ? 'Device heartbeat unavailable. Commands are disabled; the LED display is the last reported state.' : LINK_DOWN_TEXT);
       setStateMessage('command-result', 'link-down',
-        `Command not delivered: the station board and the bridge board cannot talk over the UART wire. ${unchanged}`);
+        `Command not delivered: the station board and the bridge board cannot talk over the SPI/UART wire. ${unchanged}`);
       break;
     case api.ErrorCode.COMMAND_FAILED:
       // The device answered and said the switch did not take. That is not
@@ -680,9 +680,9 @@ function renderShown() {
 // ---------------------------------------------------------------------------
 
 const GW_DIAGNOSIS = {
-  forwarding: ['ok', 'Gateway forwarding: Board A answers, and traffic passes through the UART link and Board B.'],
+  forwarding: ['ok', 'Gateway forwarding: Board A answers, and traffic passes through the SPI/UART link and Board B.'],
   board_a_down: ['link-down', 'Board A is not answering. Check its power, and that this computer is on its Wi-Fi.'],
-  link_or_upstream_down: ['denied', "Board A answers, but no traffic passes through it: the UART link or Board B's upstream Wi-Fi is down. These checks cannot tell which."],
+  link_or_upstream_down: ['denied', "Board A answers, but no traffic passes through it: the SPI/UART link or Board B's upstream Wi-Fi is down. These checks cannot tell which."],
   checking: ['pending', 'Checking the gateway…'],
   not_monitored: ['', 'Gateway checks are off for this service, so only the IoT device is monitored.'],
 };
@@ -711,7 +711,7 @@ function renderGatewayMonitoring() {
     el.dataset.value = value;
     if (key !== 'device' && typeof c.target === 'string') {
       document.getElementById(`gw-${key}-medium`).textContent =
-        key === 'board_a' ? `Ping to ${c.target} from this computer` : `Connection to ${c.target} through A, the UART link and B`;
+        key === 'board_a' ? `Ping to ${c.target} from this computer` : `Connection to ${c.target} through A, the SPI/UART link and B`;
     }
     const parts = [];
     if (Number.isFinite(c.latency_ms)) parts.push(`${c.latency_ms} ms`);

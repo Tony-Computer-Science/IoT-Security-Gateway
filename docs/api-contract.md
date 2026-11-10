@@ -1,6 +1,6 @@
 # REST API contract
 
-**Version: 0.3.3**
+**Version: 0.4.0**
 
 This is the interface between the web interface (`web/`) and the **separate
 web service**, hosted outside the ESP32 boards. For simplicity, the demo runs
@@ -15,8 +15,9 @@ website, backed by an outbound-polling Board C. Its device channel is specified
 in [device API](device-api.md). Follow [Setting Up](../README.md#setting-up)
 for the fixed-IP PC demo and [S3 live test](s3-live-test.md) for S3 bench details.
 Board A and Board B provide networking; Board C controls
-the LED. The service does not authenticate the intentionally vulnerable target
-or claim the original gateway-only security architecture.
+the LED. The real service authenticates the target through mutual TLS and
+restricts browser access to the hosting PC. This does not establish the
+original gateway-only security architecture or physical isolation acceptance.
 
 Versioning follows semver. Before 1.0.0, a minor bump (0.x.0) may break
 compatibility, and a patch bump (0.0.x) must not.
@@ -27,7 +28,8 @@ compatibility, and a patch bump (0.0.x) must not.
 
 | Rule | Detail |
 |---|---|
-| Transport | Local-computer demo: HTTP port 8000 on the private station subnet. Mock: HTTP localhost. The current service does not implement TLS. |
+| Transport | PC-local browser traffic uses HTTP port 8000; the separate device channel uses mutual TLS on 8443. Mock: HTTP localhost. |
+| PC admission | UI/API connections must originate from the bound PC address or IPv4 loopback. Other sources receive 403 `{ "error": "pc_only" }`, including before login. The CLI mock applies the same browser restriction. |
 | Encoding | All request and response bodies are JSON (`Content-Type: application/json`), UTF-8. |
 | Authentication | Every endpoint except `POST /api/login` requires `Authorization: Bearer <token>`. |
 | Paths | Clients always use **relative** paths such as `/api/status`. Never hardcode a scheme, host, or port. |
@@ -91,7 +93,7 @@ Reads service and target status. Clients poll this at a fixed interval
 |---|---|
 | `output` | Last known LED state on the target. |
 | `target_reachable` | The service received a valid Board C heartbeat within the previous eight seconds. |
-| `link_ok` | Device-channel availability, using the same heartbeat deadline. Does not measure the A/B SPI/UART link. |
+| `link_ok` | Device-channel availability, using the same heartbeat deadline. Does not measure the A/B SPI/SPI/UART link. |
 | `uptime_s` | Seconds since the web service started. A decrease means the service restarted. |
 | `seq` | Sequence number of the most recent event-log entry, or 0 before the first event. Lets clients notice new events without fetching `/api/events`. |
 
@@ -140,7 +142,7 @@ may precede the window and gives the state in effect when it opens.
 | Check | Method | What a pass shows |
 |---|---|---|
 | `board_a` | ICMP echo to Board A's AP address every 2 s | Board A is powered and its AP is up. Board A answers gateway pings even while the link is down. |
-| `gateway_path` | TCP connect to an outside IPv4:port every 5 s | Board A forwards (link ready), the UART link carries traffic, and Board B's upstream and NAT work. It cannot say which of these failed. |
+| `gateway_path` | TCP connect to an outside IPv4:port every 5 s | Board A forwards (link ready), the SPI/UART link carries traffic, and Board B's upstream and NAT work. It cannot say which of these failed. |
 | `device` | Board C heartbeat (8 s deadline) | The device is polling the service. `unknown` until the first report. |
 
 A check turns `down` after two consecutive failures and `up` after one success.
@@ -294,9 +296,17 @@ are current lab service limits, not firmware-wide security guarantees.
 
 ## 5. Changelog
 
+### 0.4.0 — PC-only access and authenticated target
+
+- Restrict UI/API access to the hosting PC; remote AP browsers receive 403
+  `pc_only`. Login, control and events retain their existing fields and behavior
+  for permitted PC clients. The CLI mock enforces the same admission rule.
+- Move real device polls to mutual TLS, as specified by device API 0.2.0.
+  A plaintext poll cannot create or refresh target state.
+
 ### 0.3.3 — live gateway monitoring
 
-- The real service checks Board A by ping and the path through the UART link
+- The real service checks Board A by ping and the path through the SPI/UART link
   and Board B by a TCP connection to an outside address, and reports them with
   five-minute histories in `status.monitoring`, alongside the device heartbeat.
 - Add the `gateway` event type for check transitions.

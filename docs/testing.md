@@ -67,6 +67,97 @@ S3 or C6 (configure the verified carrier LED pin for S3). Choose the matching `i
 `idf.py set-target esp32c6` on initial configuration. Set-target resets
 sdkconfig, so configure credentials afterward. See the [firmware index](../firmware/README.md).
 
+## Recorded C6 home-network portal bench — 2026-11-09
+
+One C6 previously running the red bridge role was temporarily flashed with
+`target-device`. The Linux laptop hosted the existing PC service on its
+home-network IPv4 address, held static for the active Wi-Fi session. The saved
+laptop Wi-Fi profile remains DHCP; reconnecting or rebooting restores that
+profile. This bench bypasses A/B and does not change the gateway demo's
+`192.168.78.10:8000` endpoint.
+
+On the separate home IoT network, the C6 associated and obtained DHCP. The
+laptop received four of four ping replies, but device-initiated HTTP polls
+to the laptop timed out. This demonstrates an unusable application path in
+that arrangement, not proof of which router or firewall rule caused it.
+
+On the home main network, WPA3 authentication initially failed repeatedly.
+Explicitly selecting both SAE password-element methods, as the bridge already
+does, allowed association, DHCP and real device polling. Wi-Fi disconnects now
+log their reason code without logging credentials.
+
+Software validation passed separately: `bash ci/run.sh` (22 service tests,
+eight browser-client tests, sanitized target parser and web asset checks),
+and ESP-IDF 6.1 target builds for C6 and S3. The S3 build used nonempty dummy
+Wi-Fi settings and GPIO48 for compilation only; no S3 was flashed in this run.
+
+| Physical C6 / browser check | Observation |
+|---|---|
+| Login and heartbeat | Browser sign-in succeeded; target became reachable and controls enabled |
+| Output commands | Browser ON/OFF commands received matching device confirmations and status updates |
+| Green output | Operator visually confirmed the controllable RGB LED was green after ON; optical OFF was not separately confirmed |
+| Missing heartbeats | Pausing the C6 for more than eight seconds marked the target unavailable and disabled controls |
+| Device restart | Restarted C6 rejoined Wi-Fi and restored fresh reports without reflashing |
+| Service restart | Old sessions returned 401, browser required login again, and the C6 resumed polling |
+| Events | Browser showed authentication, availability and confirmed-command entries; Allowed filtering worked |
+
+At the end of the application test, the C6 was reachable with green output
+and a running PC service. Private credentials, generated firmware and detailed local logs are
+not committed. A/B forwarding, gateway isolation, the final Windows setup and
+the third-board configuration remain separate acceptance work.
+
+### Shutdown and school configuration restoration — 2026-11-09
+
+After the bench test, LED OFF was acknowledged, the PC service was stopped,
+and the laptop's saved DHCP settings were reapplied. Board C's private
+configuration was restored to IoT-Gateway and the real demo endpoint
+`192.168.78.10:8000`, with the passphrase matching Board A. The connected C6
+was rebuilt and reflashed; flash hashes verified and its startup log confirmed
+that server endpoint. It was then left in programming mode with the output
+off, so its application and Wi-Fi remain stopped until reset or a power cycle.
+
+The bridge's private configuration now selects the school SSID, OWE and an empty
+passphrase. The saved laptop school profile reports OWE, so firmware now has
+an explicit Enhanced Open option. That mode requires protected management
+frames and rejects associations that are not OWE; personal WPA2/WPA3 remains
+the default and still requires a passphrase.
+
+Separate software validation passed: `bash ci/run.sh`, the sanitized gateway
+host tests, the C6 target build, a C6 bridge OWE build and an isolated S3 bridge
+personal-mode build with nonempty dummy credentials. No home PC endpoint is
+present in the restored target image or tracked configuration defaults.
+The prepared bridge image was not flashed onto the repurposed IoT-device C6.
+School-network association, DHCP, DNS, internet access and any campus admission
+requirements remain unverified until the actual bridge is tested at school.
+
+### Three-C6 deployment — 2026-11-09
+
+With all three C6 boards connected, chip identification confirmed C6 revision
+0.0 on each port before flashing. The existing station kept its role, the
+new board's blink demonstration was replaced with bridge firmware to match
+the physical jumper pair, and the earlier target retained its role. All three ESP-IDF 6.1
+builds passed; all bootloader, partition-table and application flash hashes
+verified. Startup logs confirmed blue station, red bridge and the target
+polling the real demo endpoint. Private USB identifiers and raw logs are not
+committed.
+
+The bridge associated to the school uplink using WPA3-OWE with protected
+management frames and received an IPv4 lease. The IoT target associated to
+the station AP and received a client lease. These are physical radio/DHCP
+observations, separate from software validation.
+
+Both gateway startup logs selected UART TX=6, RX=7 at 921600 baud. After the
+role assignment matched the physical jumper pair, both gates opened. The
+bridge's upstream DNS/HTTP probes and the station's DNS/HTTP probes through
+UART passed. The target needs no signal jumpers.
+
+The Linux laptop joined the station AP at the configured fixed UI address.
+Its internet HTTP check passed, the real portal accepted login and received
+fresh target reports, and a browser ON command received a matching device
+acknowledgement. Full three-board restart/soak testing and gateway isolation
+were not established by this check. A later SPI/isolation change is separate
+from these UART observations.
+
 ## Merge integration checks — 2026-11-08
 
 The PR #6 integration preserves main's events/theme/live-monitoring behavior
@@ -204,9 +295,10 @@ For the physical target, use `web/device_server.py` with Board C and the
 fixed-address PC. Follow [Board C's acceptance steps](../firmware/target-device/README.md#behavior-and-verification):
 confirm physical green/off output, availability after disconnect/reconnect,
 device restart and service restart. Browser login and command validation are
-implemented in the PC service. Device authentication, TLS and per-client
-network policy remain unimplemented; WPA2 admission does not establish
-compliance with the original security requirements.
+implemented in the PC service. The deployed target channel requires mutual TLS, and its IPv4 policy admits
+PC application traffic plus DHCP and local ping. Verify these boundaries
+separately using [the isolation guide](device-isolation.md); WPA2 admission
+alone does not establish compliance with the original security requirements.
 
 ## Production Board A acceptance — partial C6 UART validation
 
@@ -246,3 +338,69 @@ peer-client isolation or application authorization as a passing test.
 
 For multiple clients, Windows UI static addressing, and outside-initiated
 connection checks, also follow [the client-network procedure](client-network.md).
+
+
+## Recorded C6 SPI and authenticated target bench — 2026-11-09
+
+Three ESP32-C6 rev 0.0 development boards use station blue, bridge red and
+controllable target green (GPIO8). Private sdkconfig, identities, binaries
+and detailed serial logs are excluded from Git. The UI/API remains on the
+fixed-address PC; the target uses its separate mutual-TLS device listener.
+
+The working physical SPI variant maps station SCLK GPIO7 to bridge SCLK
+GPIO6, station MOSI GPIO6 to bridge MOSI GPIO7, with MISO2, CS18, HS19 and
+common GND matched at both ends. These pin selections are saved in private
+menuconfig; the published standard C6 wiring/defaults are unchanged. Keep
+this bench wiring as configured. Both boards use mode 0 at 4 MHz, completed
+12800-bit frames, and reported zero malformed frames during the recorded
+short DNS/HTTP checks. Pairing rejects during startup are distinct from
+malformed wire frames. CRC is not authentication of the physical link.
+
+The laptop and target joined the AP. The real target confirmed ON/OFF/ON
+over mutual TLS. After the ping-policy update, authorized PC ping and a
+second source-IP alias ping to the target both passed. That alias received
+`403 pc_only` from the UI/API. Plain HTTP device polling was rejected and a
+TLS client lacking a client certificate was denied. The final report was
+fresh and ON. The operator independently confirmed that the UI controlled
+the target. An IP alias is not a second physical radio client or a complete
+spoofing test; ARP/shared-airtime interference remains outside this test.
+
+The PC initially failed repeated Wi-Fi associations despite clean SPI
+frames and ample free heap. The station was rebuilt/flashed with explicit
+20 MHz B/G/N AP operation; the next PC association and live control passed.
+This is a compatibility observation, not proof of a driver root cause or a
+long-term recovery/soak pass. Do not substitute it for the pending checklist.
+
+The operator reported roughly 750 kbps while pages loaded. A separate
+524288-byte HTTPS download completed with certificate validation enabled:
+6.51 s setup and 6.97 s body transfer, approximately 0.60 Mbps during the body
+and 0.31 Mbps including setup. This measures the current laptop/upstream
+path, not standalone SPI capacity. The 4 MHz clock is 4 Mbps raw signaling,
+not an achieved internet rate. Normal browsing latency remains a limitation.
+
+Validation after the changes: portable CI passed 22 service tests, 10 real
+TLS/admission tests, 8 browser-client tests, sanitized target parser and
+IPv4 policy tests, and the asset build (13348 bytes gzip). The saved Postman
+collection passed 12 requests / 24 assertions against a software actor. Gateway host
+protocol/session/firewall tests passed. ESP-IDF 6.1 built station/bridge C6,
+S3 SPI test-host and C6/S3 target images. The final C6 station and target
+updates were flashed with hash verification; S3 target was compile-only.
+Windows firewall/static-IP acceptance, a second physical unauthorized client,
+SPI reset/cable-loss acceptance and extended soak remain pending.
+
+
+## Merge validation with live gateway monitoring — 2026-11-09
+
+The combined branch retains main's live gateway histories and contributor
+roster alongside PC-only browser access, the mutual-TLS target listener and
+local-ping policy. Conflicts were resolved in an isolated checkout; the live
+UI process, network settings and flashed boards were not changed.
+
+Portable CI passed 22 service tests, 11 TLS/admission tests (including real
+CLI startup with TLS and monitoring together), 15 gateway-monitor tests,
+12 browser-client/timeline tests, sanitized firmware parser/input-policy
+tests and the asset build (15753 bytes gzip). Gateway host tests and the saved
+Postman collection (12 requests / 24 assertions) passed. Firmware source is
+identical to the previously validated C6/S3 images; no hardware test was
+repeated for this merge. GitHub's hosted integration job remains skipped
+until the repository enables it; local validation is separate evidence.

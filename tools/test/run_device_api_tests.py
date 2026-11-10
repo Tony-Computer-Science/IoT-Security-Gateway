@@ -19,7 +19,7 @@ def main():
     password = secrets.token_urlsafe(18)
     handler = type("CollectionHandler", (DeviceHandler,), {
         "gateway": DeviceGateway(copy.deepcopy(FIXTURES), password), "quiet": True})
-    with DeviceHTTPServer(("127.0.0.1", 0), handler) as server:
+    with DeviceHTTPServer(("127.0.0.1", 0), handler, local_ui_only=False) as server:
         worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": .01}, daemon=True)
         worker.start()
         base = "http://127.0.0.1:%d" % server.server_port

@@ -98,7 +98,7 @@ class GatewayMonitorTests(unittest.TestCase):
         self.assertIsNone(snap["board_a"]["latency_ms"])
         self.assertEqual(self.gateway_events()[2:], [
             ("alert", "Board A not answering ping"),
-            ("alert", "no traffic through the gateway: UART link or Board B upstream down")])
+            ("alert", "no traffic through the gateway: SPI/UART link or Board B upstream down")])
         self.board_a.results = [UP]
         self.path.results = [UP]
         self.advance(6)

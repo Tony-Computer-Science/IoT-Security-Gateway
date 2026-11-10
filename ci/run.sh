@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 python3 tools/test/test_device_server.py
+python3 tools/test/test_device_isolation.py
 python3 tools/test/test_gateway_monitor.py
 node --test tools/test/test_web_api.mjs tools/test/test_web_timeline.mjs
 

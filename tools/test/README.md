@@ -20,7 +20,8 @@ in a restricted environment, prefix either C runner with
 ## Board C and PC service
 
 The required `bash ci/run.sh` also runs eight browser-client tests with
-Node 18+, the target parser and asset validation alongside the HTTP suite.
+Node 18+, the target parser and asset validation alongside HTTP and mutual-TLS suites. OpenSSL is needed to generate temporary
+private test identities.
 
 Run from the repository root. The target parser runner uses and verifies
 managed cJSON from an ESP-IDF build when available; otherwise it downloads
@@ -29,22 +30,29 @@ the pinned archive and verifies its SHA-256 hashes:
 ```sh
 ASAN_OPTIONS=detect_leaks=0 python3 tools/test/run_target_tests.py
 python3 tools/test/test_device_server.py
+python3 tools/test/test_device_isolation.py
 python3 tools/test/run_device_api_tests.py
 python3 web/scripts/build.py
 ```
 
 - `run_target_tests.py` compiles the exact firmware report encoder/response
-  parser and pinned cJSON with ASan/UBSan. It covers truncated/oversized JSON,
+  parser and pinned cJSON with ASan/UBSan. It also checks the exact target IPv4 policy: PC application traffic, peer
+  application denial, local ping, DHCP and malformed/fragmented packets. It
+  covers truncated/oversized JSON,
   nesting, escapes, duplicates, unknown actions, invalid IDs and report bounds.
   Requires a C compiler; a first run without managed cJSON needs network access.
-- `test_device_server.py` runs eighteen stdlib tests against the real PC HTTP
+- `test_device_server.py` runs twenty-two stdlib tests against the real PC HTTP
   service with a protocol-level device actor. It checks login/logout, LED
   on/off confirmation, missing/wrong acknowledgements, device/PC restarts,
   stale heartbeats, command contention, malformed requests and event logging.
   It binds only a temporary loopback port and never changes Wi-Fi.
+- `test_device_isolation.py` runs ten real TLS/admission checks with temporary
+  private CAs and EC identities: valid client, missing/untrusted/wrong pinned
+  certificate, no plaintext fallback, PC-only UI, bounded idle TLS handshakes
+  and loopback-only software actors. These do not use a real ESP32.
 - `run_device_api_tests.py` runs the saved
   [Postman collection](device-api.postman_collection.json) against the real
-  local service and actor: 12 requests / 23 assertions. Requires `postman`
+  local service and actor: 12 requests / 24 assertions. Requires `postman`
   on PATH. The harness supplies a random temporary login password, cleans up
   its private environment file, and disables run-result uploads. No Postman
   account or shared workspace is required for this local run.

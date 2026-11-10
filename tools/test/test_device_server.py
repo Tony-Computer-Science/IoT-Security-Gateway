@@ -95,7 +95,7 @@ class DeviceServerTests(unittest.TestCase):
     def setUp(self):
         self.gateway = DeviceGateway(copy.deepcopy(FIXTURES), "test-only-password", command_timeout_s=.2)
         self.handler = type("TestHandler", (DeviceHandler,), {"gateway": self.gateway, "quiet": True})
-        self.server = DeviceHTTPServer(("127.0.0.1", 0), self.handler)
+        self.server = DeviceHTTPServer(("127.0.0.1", 0), self.handler, local_ui_only=False)
         self.worker = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": .01}, daemon=True)
         self.worker.start()
         self.base = "http://127.0.0.1:%d" % self.server.server_port
@@ -245,7 +245,8 @@ class DeviceServerTests(unittest.TestCase):
         self.assertEqual(result[0], (200, {"result": "ok", "output": "off"}))
 
     def test_browser_traffic_cannot_take_device_slots(self):
-        server = DeviceHTTPServer(("127.0.0.1", 0), self.handler, total_slots=3, device_slots=2)
+        server = DeviceHTTPServer(("127.0.0.1", 0), self.handler, total_slots=3, device_slots=2,
+                                  local_ui_only=False)
         worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": .01}, daemon=True)
         worker.start()
         base = "http://127.0.0.1:%d" % server.server_port

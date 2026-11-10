@@ -297,7 +297,8 @@
             "type": "text/javascript",
             "exec": [
               "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
-              "pm.test(\"commands recorded\", () => pm.expect(pm.response.json().events.filter(e=>e.type===\"command\").length).to.eql(2));"
+              "pm.test(\"confirmed commands recorded\", () => pm.expect(pm.response.json().events.filter(e=>e.type===\"command\" && e.outcome===\"allowed\").length).to.eql(2));",
+              "pm.test(\"invalid command denial recorded\", () => pm.expect(pm.response.json().events.filter(e=>e.type===\"command\" && e.outcome===\"denied\").length).to.eql(1));"
             ]
           }
         }

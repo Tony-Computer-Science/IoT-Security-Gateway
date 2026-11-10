@@ -2,17 +2,20 @@
 
 ESP-IDF **6.1**, **ESP32-C6** (4 MB) or **ESP32-S3 N16R8** (16 MB).
 Board C joins **IoT-Gateway** over
-Wi-Fi and polls the UI computer at **192.168.78.10:8000**. It uses the existing
+Wi-Fi and polls the PC device listener at **192.168.78.10:8443** using mutual
+TLS. The browser UI stays at **192.168.78.10:8000**. It uses the existing
 website's `led_on` / `led_off` commands. It needs USB power and no signal
 jumpers to station or bridge. The website/API is a separate service outside
 the boards; running it on the local computer simplifies the demo instead of
 requiring a dedicated server. Follow [Setting Up](../../README.md#setting-up)
 for the full startup order and LED/network checks.
 
-This is an intentionally vulnerable lab target: its device channel is
-unauthenticated plain HTTP. Use it only on the private lab AP. Device IDs
-are public labels, not authentication; admitted AP peers can impersonate the
-target. Wi-Fi credentials stay in ignored sdkconfig, never tracked source.
+The target permits application traffic only from the PC and requires mutual
+TLS. DHCP replies and unfragmented ping on the AP /24 are allowed exceptions. Other AP clients keep internet.
+ARP and Wi-Fi management remain available; this is not AP-wide layer-2
+isolation. See [PC-only isolation](../../docs/device-isolation.md) for identity
+provisioning, clock bootstrap, rotation and limits. Device IDs remain labels;
+Wi-Fi credentials and device keys stay private.
 
 ## Current owner (provisional)
 
@@ -39,7 +42,8 @@ ordinary Wi-Fi clients on the AP.
 
 ## Configure, build and flash
 
-Activate your ESP-IDF 6.1 environment, then:
+First run `python3 tools/provision_device_tls.py` at the repository root on
+the PC (OpenSSL required once). Activate ESP-IDF 6.1, then:
 
 ```sh
 cd firmware/target-device
@@ -55,7 +59,7 @@ Under **Board C IoT device**, set:
 |---|---|
 | Station AP SSID | `IoT-Gateway` |
 | Station AP passphrase | The private station AP password, not the upstream Wi-Fi password |
-| UI computer IPv4 / HTTP port | `192.168.78.10` / `8000` |
+| PC IPv4 / device TLS port | `192.168.78.10` / `8443` (browser stays on 8000) |
 | Device ID | `iot-c6`, matching the PC server's `--device-id` |
 | Command polling interval | 500 ms by default |
 | Addressable RGB LED GPIO | 8 on the matching C6 DevKit board |
@@ -66,7 +70,7 @@ The tested HW678 carrier uses GPIO48; that observation does not apply to every
 S3 carrier. Target-specific defaults select 16 MB flash and USB Serial/JTAG.
 See the [S3 build and bench guide](../../docs/s3-live-test.md).
 
-The UI address and port are compiled into the device firmware as
+The PC address and device TLS port are compiled into the device firmware as
 `TARGET_UI_HOST` / `TARGET_UI_PORT`; there is no automatic server discovery.
 The PC acts as the server at that fixed endpoint for this demo. If the UI/API
 is moved to a dedicated server at another address/port, change these settings,
@@ -83,31 +87,38 @@ on a carrier board: confirm its GPIO if using a different development board.
 
 - Starts with the controllable RGB LED off. `led_on` drives green; `led_off`
   turns it off. The separate power LED can stay lit.
-- Opens outbound HTTP requests to the PC. No HTTP server runs on Board C,
+- Opens outbound authenticated HTTPS requests to the PC. No HTTP server runs on Board C,
   and no router port forwarding is needed. PC and target communicate locally
   on the station AP, even without an internet connection.
 - Reports its last successfully driven output and confirms commands by ID.
   The website reports success only after a matching acknowledgement. Duplicate
   delivery of the most recently attempted command ID does not apply it twice;
   the board keeps only that last ID, not a history of all commands.
+- WPA3 connections enable both SAE password-element methods, matching the
+  bridge's upstream configuration. Wi-Fi disconnect logs include the reason
+  code without credentials.
 - Wi-Fi/HTTP outages retain the output and retry with bounded delays. New
   device boot IDs invalidate pending commands; expired work is not queued
   for later replay. A lost confirmation can leave an unknown result, which
   the website states explicitly and reconciles with later status reports.
 
 For hardware acceptance, join the PC and Board C to IoT-Gateway, start the
-service, open the page from the PC or a phone, and try both LED buttons.
+service, open the page from the PC, and try both LED buttons.
 Unplug/reconnect Board C and restart the PC service; check availability,
-login renewal and LED status after each recovery. Leave station/bridge UART
-wiring as it is. This completes a local Wi-Fi application test; the gateway's
+login renewal and LED status after each recovery. Leave the working
+station/bridge link wiring as it is. This completes a local Wi-Fi application test; the gateway's
 upstream routing is tested separately.
 
 The C6 firmware build passed on 2026-11-05. Sanitized C response-parser tests,
 ten real-HTTP server tests, and twelve Postman requests / 23 assertions were
 rerun successfully on 2026-11-08; see the [software validation record](../../docs/testing.md#recorded-local-software-validation--2026-11-08).
-The HTTP tests use a protocol-level device actor, not C6 hardware. This image
-has not yet been flashed onto the C6 third board; its radio, LED and Windows
-integration still need the acceptance steps above. The separate S3 bench
+The HTTP tests use a protocol-level device actor, not C6 hardware. A repurposed
+C6 passed a separate home-network portal bench on 2026-11-09, including
+operator-confirmed green output, command acknowledgements and restart recovery;
+see the [C6 bench record](../../docs/testing.md#recorded-c6-home-network-portal-bench--2026-11-09).
+The three-C6 Linux PC bench passed real control and the documented local
+ping/application-filter checks; see the [SPI/TLS record](../../docs/testing.md#recorded-c6-spi-and-authenticated-target-bench--2026-11-09).
+Windows integration still needs the acceptance steps above. The separate S3 bench
 test recorded physical on/off and heartbeat/restart recovery on 2026-11-07;
 see [that evidence](../../docs/s3-test-evidence.md). It does not establish
 acceptance of the gateway's fixed-IP Windows setup.

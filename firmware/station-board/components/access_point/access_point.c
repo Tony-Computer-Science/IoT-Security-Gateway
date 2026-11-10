@@ -191,6 +191,11 @@ esp_err_t access_point_start(void)
     config.ap.max_connection = CONFIG_GW_AP_MAX_CLIENTS;
     config.ap.pmf_cfg.required = false;
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &config));
+    /* Keep the local client radio on a predictable 20 MHz B/G/N mode.
+     * The wired link is slower than Wi-Fi; wider/HE operation adds no benefit. */
+    ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_AP,
+                                         WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N));
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW20));
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_ip4_addr_t ui_ip = {.addr = htonl((network.ap_ip & GW_AP_MASK) | CONFIG_GW_AP_UI_HOST)};
     ESP_LOGI(TAG, "Gateway " IPSTR "/24, DHCP .%d-.%d, channel=%d, clients=%d", IP2STR(&ap_ip),
