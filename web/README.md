@@ -56,7 +56,10 @@ before launch to choose one. No package installation or web build is needed.
 This password is separate from the Wi-Fi passphrase.
 
 Service options are `--host` (default `192.168.78.10`), `--port` (default
-`8000`), `--device-id` (default `iot-c6`) and `--quiet` (suppress request logs).
+`8000`), `--device-id` (default `iot-c6`), `--quiet` (suppress request logs),
+`--gateway-ip` (Board A address to ping, default `192.168.78.1`), `--outside`
+(IPv4:port reached through the gateway, default `1.1.1.1:443`) and
+`--no-gateway-checks` (bench tests without Boards A and B).
 Match the address, port and device ID in Board C's menuconfig. When
 `UI_PASSWORD` is set, startup prints `(from UI_PASSWORD)` instead of the
 password; sign in with the value you configured.

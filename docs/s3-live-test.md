@@ -32,8 +32,12 @@ then start the service after assigning the PC its fixed address:
 
 ```sh
 python3 tools/provision_device_tls.py
-python3 web/device_server.py --host 192.168.78.10 --port 8000 --device-id iot-s3
+python3 web/device_server.py --host 192.168.78.10 --port 8000 --device-id iot-s3 --no-gateway-checks
 ```
+
+`--no-gateway-checks` disables the Board A and gateway-path checks, which
+would only report "down" on a bench network without Boards A and B. The device
+timeline still runs.
 
 Open `http://192.168.78.10:8000/`. Set the target device ID to `iot-s3`
 to match this command (the default `iot-c6` also works if both sides match). Sign in as `operator` with the randomly

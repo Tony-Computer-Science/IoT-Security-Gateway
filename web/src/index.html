@@ -55,7 +55,7 @@
         <!-- One row of three readouts. Each unit is one label, one value, and
              the medium beneath it. The thin strip on top of each unit is the
              hardware path, in the order data travels from the upstream side:
-             bridge board B to station board A over the UART wire, A to IoT
+             bridge board B to station board A over the SPI/UART wire, A to IoT
              device C over A's private Wi-Fi, C the device. It is context for
              where a failure happened. -->
         <ol class="path" aria-label="Signal path from the gateway to the device">
@@ -64,7 +64,7 @@
             <dl class="readout">
               <dt><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1"/></svg> <span id="link-label">Board-to-board link</span></dt>
               <dd id="status-link">—</dd>
-              <dd id="link-medium" class="medium">UART wire, bridge board B to station board A</dd>
+              <dd id="link-medium" class="medium">SPI/UART wire, bridge board B to station board A</dd>
             </dl>
           </li>
           <li class="unit unit-target">
@@ -110,6 +110,34 @@
           </dl>
           <p class="medium monitoring-note">Command history is shared across signed-in users and resets with the service. It does not replace the latest LED state above.</p>
         </div>
+        <section id="gateway-monitoring" class="gateway-monitor" aria-labelledby="gw-heading" hidden>
+          <h3 id="gw-heading">Live gateway monitoring</h3>
+          <p id="gw-diagnosis" class="state" data-state="" role="status"></p>
+          <ul class="gw-rows">
+          <li class="gw-row" data-component="board_a">
+            <div class="gw-name">Board A<span id="gw-board_a-medium" class="medium">Ping from this computer</span></div>
+            <div id="gw-board_a-state" class="gw-value" data-value="unknown">Unknown</div>
+            <div id="gw-board_a-detail" class="gw-detail medium"></div>
+            <div id="gw-board_a-strip" class="gw-strip" role="img" aria-label="No history yet"></div>
+          </li>
+          <li class="gw-row" data-component="gateway_path">
+            <div class="gw-name">Path through the gateway<span id="gw-gateway_path-medium" class="medium">SPI/UART link, Board B and its upstream Wi-Fi</span></div>
+            <div id="gw-gateway_path-state" class="gw-value" data-value="unknown">Unknown</div>
+            <div id="gw-gateway_path-detail" class="gw-detail medium"></div>
+            <div id="gw-gateway_path-strip" class="gw-strip" role="img" aria-label="No history yet"></div>
+          </li>
+          <li class="gw-row" data-component="device">
+            <div class="gw-name">IoT device C<span id="gw-device-medium" class="medium">Heartbeat to the API service</span></div>
+            <div id="gw-device-state" class="gw-value" data-value="unknown">Unknown</div>
+            <div id="gw-device-detail" class="gw-detail medium"></div>
+            <div id="gw-device-strip" class="gw-strip" role="img" aria-label="No history yet"></div>
+          </li>
+            <li class="gw-row gw-axis-row" aria-hidden="true">
+              <div class="gw-axis medium"><span id="gw-axis-start">5 min ago</span><span>now</span></div>
+            </li>
+          </ul>
+          <p id="gw-note" class="medium monitoring-note"></p>
+        </section>
       </div>
       <button type="button" id="logout-btn" class="link-btn">Sign out</button>
     </section>

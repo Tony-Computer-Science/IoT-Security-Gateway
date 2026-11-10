@@ -14,6 +14,7 @@ the roster below and create CODEOWNERS if automatic review routing is wanted.
 | Zachariah Grande | `@TODO-username-grande` | TODO |
 | Lalit Dhakal | `@TODO-username-dhakal` | TODO |
 | Carter Cattadoris | `@TODO-username-cattadoris` | TODO |
+| Tiancan Ni | `@TODO-username-tiancanni` | TODO |
 
 Known username: **`DEADSEC-SECURITY`**. TODO: record which member it belongs to
 and swap it in for that member's placeholder.

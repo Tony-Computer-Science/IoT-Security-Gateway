@@ -387,3 +387,20 @@ S3 SPI test-host and C6/S3 target images. The final C6 station and target
 updates were flashed with hash verification; S3 target was compile-only.
 Windows firewall/static-IP acceptance, a second physical unauthorized client,
 SPI reset/cable-loss acceptance and extended soak remain pending.
+
+
+## Merge validation with live gateway monitoring — 2026-11-09
+
+The combined branch retains main's live gateway histories and contributor
+roster alongside PC-only browser access, the mutual-TLS target listener and
+local-ping policy. Conflicts were resolved in an isolated checkout; the live
+UI process, network settings and flashed boards were not changed.
+
+Portable CI passed 22 service tests, 11 TLS/admission tests (including real
+CLI startup with TLS and monitoring together), 15 gateway-monitor tests,
+12 browser-client/timeline tests, sanitized firmware parser/input-policy
+tests and the asset build (15753 bytes gzip). Gateway host tests and the saved
+Postman collection (12 requests / 24 assertions) passed. Firmware source is
+identical to the previously validated C6/S3 images; no hardware test was
+repeated for this merge. GitHub's hosted integration job remains skipped
+until the repository enables it; local validation is separate evidence.

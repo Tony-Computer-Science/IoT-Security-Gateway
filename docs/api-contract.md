@@ -93,7 +93,7 @@ Reads service and target status. Clients poll this at a fixed interval
 |---|---|
 | `output` | Last known LED state on the target. |
 | `target_reachable` | The service received a valid Board C heartbeat within the previous eight seconds. |
-| `link_ok` | Device-channel availability, using the same heartbeat deadline. Does not measure the A/B SPI/UART link. |
+| `link_ok` | Device-channel availability, using the same heartbeat deadline. Does not measure the A/B SPI/SPI/UART link. |
 | `uptime_s` | Seconds since the web service started. A decrease means the service restarted. |
 | `seq` | Sequence number of the most recent event-log entry, or 0 before the first event. Lets clients notice new events without fetching `/api/events`. |
 
@@ -118,6 +118,38 @@ including acknowledgements arriving after timeout, do not replace it. The record
 is shared across sessions, retained across device restarts, and cleared by service
 restart. It is historical evidence, not a claim about current LED state. Older
 services may omit this additive field; clients must tolerate its absence.
+
+The real service also includes `monitoring`, the live gateway checks it runs
+itself (the mock omits it):
+
+```json
+"monitoring": {
+  "enabled": boolean,
+  "now_s": number,
+  "window_s": 300,
+  "diagnosis": "forwarding" | "board_a_down" | "link_or_upstream_down" | "checking" | "not_monitored",
+  "board_a":      { "state": S, "target": "192.168.78.1", "latency_ms": number | null, "checked_s_ago": number | null, "history": H },
+  "gateway_path": { "state": S, "target": "1.1.1.1:443",  "latency_ms": number | null, "checked_s_ago": number | null, "history": H },
+  "device":       { "state": S, "history": H }
+}
+```
+
+`S` is `"unknown" | "up" | "down" | "off"` (`off`: checks disabled). `H` is the
+list of state transitions `[{ "t": number, "state": S }]`, oldest first, where
+`t` is seconds since service start on the same base as `now_s`. The first entry
+may precede the window and gives the state in effect when it opens.
+
+| Check | Method | What a pass shows |
+|---|---|---|
+| `board_a` | ICMP echo to Board A's AP address every 2 s | Board A is powered and its AP is up. Board A answers gateway pings even while the link is down. |
+| `gateway_path` | TCP connect to an outside IPv4:port every 5 s | Board A forwards (link ready), the SPI/UART link carries traffic, and Board B's upstream and NAT work. It cannot say which of these failed. |
+| `device` | Board C heartbeat (8 s deadline) | The device is polling the service. `unknown` until the first report. |
+
+A check turns `down` after two consecutive failures and `up` after one success.
+Transitions are logged as `gateway` events. The path check is meaningful only
+while the service computer routes that address through Board A. Start the
+service with `--no-gateway-checks` for a bench test without Boards A and B;
+`--gateway-ip` and `--outside` change the targets.
 
 ### 2.4 `POST /api/command`
 
@@ -173,7 +205,7 @@ Reads the bounded event log, newest first. Both query parameters are optional.
     {
       "seq": number,
       "uptime_s": number,
-      "type": "auth" | "command" | "rate_limit" | "target",
+      "type": "auth" | "command" | "gateway" | "rate_limit" | "target",
       "outcome": "allowed" | "denied" | "alert",
       "detail": string
     }
@@ -271,6 +303,14 @@ are current lab service limits, not firmware-wide security guarantees.
   for permitted PC clients. The CLI mock enforces the same admission rule.
 - Move real device polls to mutual TLS, as specified by device API 0.2.0.
   A plaintext poll cannot create or refresh target state.
+
+### 0.3.3 — live gateway monitoring
+
+- The real service checks Board A by ping and the path through the SPI/UART link
+  and Board B by a TCP connection to an outside address, and reports them with
+  five-minute histories in `status.monitoring`, alongside the device heartbeat.
+- Add the `gateway` event type for check transitions.
+- A background tick now expires a silent device even when no browser polls.
 
 ### 0.3.2 — distinct device failures and reserved device capacity
 

@@ -3,12 +3,16 @@
 import copy
 import http.client
 import json
+import os
 from pathlib import Path
+import signal
 import socket
 import ssl
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -138,6 +142,65 @@ class IsolationTests(unittest.TestCase):
     def test_tls_listener_does_not_expose_browser_api(self):
         status, _, _ = self.exchange("POST", "/api/login", {}, secure=True)
         self.assertEqual(status, 404)
+
+    def test_cli_combines_tls_device_channel_and_monitoring(self):
+        reserved = [socket.socket(), socket.socket()]
+        for listener in reserved:
+            listener.bind(("127.0.0.1", 0))
+        ui_port, device_port = [listener.getsockname()[1] for listener in reserved]
+        for listener in reserved:
+            listener.close()
+        env = dict(os.environ, UI_PASSWORD="test-only-cli-password")
+        process = subprocess.Popen(
+            [sys.executable, "-u", str(ROOT / "web/device_server.py"),
+             "--host", "127.0.0.1", "--port", str(ui_port),
+             "--device-port", str(device_port), "--identity-dir", str(self.identity),
+             "--no-gateway-checks", "--quiet"],
+            env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, text=True)
+
+        def request(port, path, body=None, token=None, secure=False):
+            headers = {"Content-Type": "application/json"}
+            if token:
+                headers["Authorization"] = "Bearer " + token
+            connection = (http.client.HTTPSConnection(
+                "127.0.0.1", port, context=self.client_context(self.identity), timeout=1)
+                if secure else http.client.HTTPConnection("127.0.0.1", port, timeout=1))
+            try:
+                connection.request("GET" if body is None else "POST", path,
+                                   None if body is None else json.dumps(body), headers)
+                response = connection.getresponse()
+                return response.status, json.loads(response.read())
+            finally:
+                connection.close()
+
+        try:
+            deadline = time.monotonic() + 8
+            while True:
+                self.assertIsNone(process.poll(), "CLI failed to start")
+                try:
+                    status, login = request(ui_port, "/api/login", {
+                        "username": "operator", "password": "test-only-cli-password"})
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(.05)
+            self.assertEqual(status, 200)
+            status, report = request(device_port, "/device/poll", REPORT, secure=True)
+            self.assertEqual((status, report), (200, {"command": None}))
+            status, result = request(ui_port, "/api/status", token=login["token"])
+            self.assertEqual(status, 200)
+            self.assertTrue(result["target_reachable"])
+            self.assertFalse(result["monitoring"]["enabled"])
+            self.assertEqual(result["monitoring"]["device"]["state"], "up")
+            process.send_signal(signal.SIGINT)
+            process.communicate(timeout=8)
+            self.assertEqual(process.returncode, 0)
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                process.communicate(timeout=8)
 
     def test_idle_handshake_does_not_block_authenticated_device(self):
         idle = [socket.create_connection(("127.0.0.1", self.device.server_port), timeout=2)
