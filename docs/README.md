@@ -12,6 +12,7 @@ board startup order, LED checks, phone internet test and separate web service.
 | [api-contract.md](api-contract.md) | Browser REST API, served by the PC in the current lab | v0.4.0 |
 | [device-api.md](device-api.md) | Board C outbound polling and command confirmation | v0.2.0 |
 | [device-isolation.md](device-isolation.md) | PC-only access, private identities and packet boundaries | Implementation and acceptance guide |
+| [isolation-demo.md](isolation-demo.md) | Record bounded inside/outside attempts with live controls and explicit routes | Linux recording procedure |
 | [client-network.md](client-network.md) | Fixed Windows UI address and outbound-only routing | Firmware implemented; Windows/multiple-client acceptance pending |
 | [spi-protocol.md](spi-protocol.md) | Frame format between Board A and Board B | v0.2.0 |
 | [uart-link.md](uart-link.md) | Optional two-wire transport, wiring and recorded C6 hardware results | Envelope v0.2.0; C6 connectivity/restart checks recorded |

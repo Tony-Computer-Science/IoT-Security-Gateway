@@ -6,6 +6,7 @@ board's firmware or the web interface.
 | Path | Purpose |
 |---|---|
 | [test/](test/README.md) | Portable C protocol/policy tests, PC HTTP/API checks and a bounded TCP/UDP echo server |
+| [isolation_demo.py](isolation_demo.py) | Bounded inside/outside lab probes with live positive controls; see the [recording guide](../docs/isolation-demo.md) |
 
 Build scripts for the web interface live in `web/scripts/`, not here.
 
