@@ -12,6 +12,13 @@
   `run_host_tests.py` alongside the protocol/access tests.
 - `echo_server.py --bind <lab-PC-IP> --port 9000`: TCP/UDP echo endpoint for
   the separate ESP32-S3 SPI host; at most eight TCP clients, bounded buffers.
+- `test_isolation_demo.py`: checks that the recording tool never treats an
+  offline target/bridge, wrong route or silent authorized baseline as an
+  isolation pass, and excludes credentials from results. Included in CI.
+
+For a real inside/outside recording, use [isolation_demo.py](../isolation_demo.py)
+and the [recording guide](../../docs/isolation-demo.md). Its network observations
+are separate from this software suite.
 
 Python services and checks use Python 3.9+. If LeakSanitizer is unavailable
 in a restricted environment, prefix either C runner with
